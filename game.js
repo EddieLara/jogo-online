@@ -5,7 +5,7 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-const socket = io('https://jogo-online2-medv.onrender.com');
+const socket = io('https://jogo-online-medv.onrender.com');
 
 // --- ASSETS E CONSTANTES ---
 function loadImage(src) {
