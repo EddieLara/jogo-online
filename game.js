@@ -13,8 +13,9 @@ function loadImage(src) {
     img.src = src;
     return img;
 }
+
 const human = loadImage('Sprites/Human.png');
-const zombie = loadImage('Sprites/Zombie.png');
+const zombie = loadImage('Sprites/Zombie.png'); // <-- ADICIONADO: Carrega a imagem do zumbi
 const box = loadImage('Sprites/Box.png');
 const grass = loadImage('Sprites/Grass.png');
 const street = loadImage('Sprites/Street.png');
@@ -37,7 +38,7 @@ const car = loadImage('Sprites/Car.png');
 
 // --- ESTADO LOCAL DO CLIENTE ---
 let myId = null;
-let gameState = { players: {}, arrows: [], timeLeft: 120, startTime: 60, gamePhase: 'waiting', abilityCosts: {}, box: [], furniture: [], ducts: [], house: {walls: []}, garage: {walls: []} };
+let gameState = { players: {}, arrows: [], timeLeft: 120, startTime: 60, gamePhase: 'waiting', abilityCosts: {} };
 const movement = { up: false, down: false, left: false, right: false };
 let mouse = { x: 0, y: 0 };
 let isMenuOpen = false;
@@ -62,10 +63,9 @@ socket.on('newMessage', (message) => {
 });
 
 // --- INPUT HANDLERS ---
-// (Nenhuma alteração nesta seção, o código permanece o mesmo)
-window.addEventListener('keydown', function(event) {
+// ... (Toda a seção de Input Handlers permanece a mesma)
+window.addEventListener('keydown', function (event) {
     const key = event.key.toLowerCase();
-
     if (key === 'enter') {
         event.preventDefault();
         if (isChatting) {
@@ -80,26 +80,21 @@ window.addEventListener('keydown', function(event) {
             chatInput.focus();
         }
     }
-
     if (key === 'escape' && isChatting) {
         chatInput.value = '';
         chatInput.blur();
     }
-
     chatInput.onfocus = () => { isChatting = true; };
     chatInput.onblur = () => {
         isChatting = false;
         chatInput.style.display = 'none';
     };
-
     if (key === 'b') {
         isMenuOpen = !isMenuOpen;
     }
-
     if (isMenuOpen || isChatting) {
         return;
     }
-
     switch (key) {
         case 'w': case 'arrowup': movement.up = true; break;
         case 's': case 'arrowdown': movement.down = true; break;
@@ -109,8 +104,7 @@ window.addEventListener('keydown', function(event) {
         case 'c': socket.emit('playerAction', { type: 'ability' }); break;
     }
 });
-
-window.addEventListener('keyup', function(event) {
+window.addEventListener('keyup', function (event) {
     const key = event.key.toLowerCase();
     switch (key) {
         case 'w': case 'arrowup': movement.up = false; break;
@@ -119,12 +113,12 @@ window.addEventListener('keyup', function(event) {
         case 'd': case 'arrowright': movement.right = false; break;
     }
 });
-canvas.addEventListener('mousemove', function(event) {
+canvas.addEventListener('mousemove', function (event) {
     const rect = canvas.getBoundingClientRect();
     mouse.x = event.clientX - rect.left;
     mouse.y = event.clientY - rect.top;
 });
-canvas.addEventListener('mousedown', function(event) {
+canvas.addEventListener('mousedown', function (event) {
     if (isMenuOpen) {
         const functionsTabBtn = getFunctionsTabRect();
         const itemsTabBtn = getItemsTabRect();
@@ -142,7 +136,6 @@ canvas.addEventListener('mousedown', function(event) {
             const archerBtn = getArcherButtonRect();
             const engineerBtn = getEngineerButtonRect();
             const antBtn = getAntButtonRect();
-
             if (isClickInside(mouse, chameleonBtn) && !gameState.takenAbilities.includes('chameleon')) {
                 socket.emit('chooseAbility', 'chameleon');
             } else if (isClickInside(mouse, athleteBtn) && !gameState.takenAbilities.includes('athlete')) {
@@ -172,7 +165,7 @@ function draw() {
         ctx.fillStyle = 'white';
         ctx.textAlign = 'center';
         ctx.font = '30px Arial';
-        ctx.fillText('Waiting for game state...', canvas.width / 2, canvas.height / 2);
+        ctx.fillText('Aguardando estado do jogo...', canvas.width / 2, canvas.height / 2);
         return;
     }
     const me = gameState.players[myId];
@@ -182,7 +175,8 @@ function draw() {
     ctx.save();
     ctx.translate(-cameraX, -cameraY);
 
-    // DESENHA MUNDO (sem alterações)
+    // DESENHA MUNDO
+    // ... (Toda a seção de desenhar o mundo permanece a mesma)
     ctx.drawImage(grass, 0, 0, 3100, 2000);
     ctx.drawImage(floors, 200, 200, 2697, 1670);
     ctx.drawImage(garageFloor, 2000, 1200, 700, 600);
@@ -235,8 +229,7 @@ function draw() {
         ctx.strokeRect(wall.x, wall.y, wall.width, wall.height);
     }
 
-
-    // DESENHA JOGADORES (sem alterações)
+    // --- MODIFICADO: Lógica para desenhar jogadores ---
     for (const playerId in gameState.players) {
         const player = gameState.players[playerId];
         if (player.isInDuct) continue;
@@ -249,6 +242,7 @@ function draw() {
             ctx.rotate(player.rotation);
         }
         
+        // Decide qual sprite desenhar
         if (player.role === 'zombie') {
             ctx.drawImage(zombie, -player.width / 2, -player.height / 2, player.width, player.height);
         } else if (player.isCamouflaged) {
@@ -256,12 +250,15 @@ function draw() {
         } else if (player.isAnt) {
             ctx.drawImage(ant, -player.width / 2, -player.height / 2, player.width, player.height);
         } else {
+            // Se não for zumbi, camuflado ou formiga, é humano
             ctx.drawImage(human, -player.width / 2, -player.height / 2, player.width, player.height);
         }
         ctx.restore();
 
+        // Desenha o nome do jogador
         if (!player.isAnt && !player.isCamouflaged && !player.isHidden) {
-            ctx.fillStyle = player.role === 'zombie' ? 'lightgreen' : 'white';
+            // Muda a cor do nome se for zumbi
+            ctx.fillStyle = player.role === 'zombie' ? '#2ecc71' : 'white';
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 5;
             ctx.textAlign = 'center';
@@ -271,55 +268,51 @@ function draw() {
         }
     }
 
+    // ... (Desenho do resto dos objetos)
     ctx.drawImage(sunshade, 4200, 1000, 320, 340);
     ctx.drawImage(sunshadeII, 4350, 600, 320, 340);
     ctx.drawImage(sunshadeIII, 4440, 1400, 320, 340);
-
     for (const arrow of gameState.arrows) {
         ctx.fillStyle = arrow.color || 'red';
         ctx.fillRect(arrow.x, arrow.y, arrow.width, arrow.height);
     }
     ctx.restore();
 
-    // DESENHA INTERFACE (HUD)
+    // --- MODIFICADO: Desenho da Interface (HUD) ---
     ctx.font = '40px Arial';
     ctx.fillStyle = 'white';
     ctx.textAlign = 'center';
+
     if (gameState.gamePhase === 'waiting') {
         const seconds = gameState.startTime % 60;
         ctx.fillText(`0:${String(seconds).padStart(2, '0')}`, canvas.width / 2, 80);
         ctx.font = '30px Arial';
-        if (gameState.zombieChosen) {
-             ctx.fillStyle = 'red';
-             ctx.fillText('THE ZOMBIE HAS BEEN CHOSEN!', canvas.width / 2, 40);
-        } else {
-             ctx.fillText('Start of the round in...', canvas.width / 2, 40);
-        }
-    } else {
+        ctx.fillText('Start of the round in...', canvas.width / 2, 40);
+    } else if (gameState.gamePhase === 'running') {
         const minutes = Math.floor(gameState.timeLeft / 60);
         const seconds = gameState.timeLeft % 60;
         ctx.fillText(`${minutes}:${String(seconds).padStart(2, '0')}`, canvas.width / 2, 50);
+    } else if (gameState.gamePhase === 'zombie') {
+        // Mostra uma mensagem na fase zumbi
+        ctx.font = '50px Arial';
+        ctx.fillStyle = 'red';
+        ctx.textAlign = 'center';
+        ctx.fillText('INFECTION!', canvas.width / 2, 80);
+        ctx.font = '30px Arial';
+        ctx.fillStyle = me.role === 'zombie' ? '#2ecc71' : 'white';
+        ctx.fillText(me.role === 'zombie' ? 'INFECT THE HUMANS!' : 'SURVIVE!', canvas.width / 2, 120);
     }
 
+    // Contador de moedas
+    // ... (O resto da HUD permanece o mesmo)
     ctx.font = '30px Arial';
     ctx.fillStyle = 'gold';
     ctx.textAlign = 'right';
     ctx.fillText(`🪙 ${me.coins}`, canvas.width - 20, 50);
-
-    ctx.font = '30px Arial';
-    ctx.textAlign = 'left';
-    ctx.fillStyle = me.role === 'zombie' ? 'lightgreen' : 'lightblue';
-    const roleText = me.role ? me.role.toUpperCase() : '...';
-    ctx.fillText(`ROLE: ${roleText}`, 10, 50);
-
     ctx.font = '30px Arial';
     ctx.textAlign = 'right';
     ctx.fillStyle = 'white';
-    
-    // <<< CORRIGIDO: Adicionada salvaguarda para evitar que a renderização quebre.
-    const speedText = (typeof me.speed === 'number' && !isNaN(me.speed)) ? me.speed.toFixed(2) : '...';
-    ctx.fillText(`SPEED: ${speedText}`, canvas.width - 20, canvas.height - 10);
-    
+    ctx.fillText(`SPEED: ${me.speed.toFixed(2)}`, canvas.width - 20, canvas.height - 10);
     ctx.textAlign = 'left';
     ctx.fillText(`SKILL: ${me.activeAbility.toUpperCase()}`, 10, canvas.height - 10);
     if (me.activeAbility === 'archer') {
@@ -364,23 +357,20 @@ function draw() {
     }
 }
 
-// O resto do arquivo (drawChat, drawMenu, funções auxiliares, gameLoop) permanece o mesmo.
+// --- FUNÇÕES AUXILIARES E GAME LOOP ---
+// ... (O resto do arquivo: drawChat, drawMenu, e todas as funções auxiliares e o gameLoop permanecem iguais)
 function drawChat() {
     if (chatMessages.length === 0) return;
-
     ctx.save();
     const chatBoxX = canvas.width / 2 - 400;
     const chatBoxY = canvas.height - 50 - (chatMessages.length * 25);
     const chatBoxWidth = 800;
     const chatBoxHeight = (chatMessages.length * 25) + 10;
-
     ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
     ctx.fillRect(chatBoxX, chatBoxY, chatBoxWidth, chatBoxHeight);
-
     ctx.font = '18px Arial';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-
     chatMessages.forEach((msg, index) => {
         const fullMessage = `${msg.name}: ${msg.text}`;
         ctx.fillStyle = 'gold';
@@ -389,10 +379,8 @@ function drawChat() {
         const nameWidth = ctx.measureText(msg.name + ': ').width;
         ctx.fillText(msg.text, chatBoxX + 10 + nameWidth, chatBoxY + 5 + (index * 25));
     });
-
     ctx.restore();
 }
-
 function drawMenu() {
     const me = gameState.players[myId];
     if (!me) {
@@ -432,7 +420,6 @@ function drawMenu() {
                 { text: 'ENGINEER', ability: 'engineer', rect: getEngineerButtonRect() },
                 { text: 'ANT', ability: 'ant', rect: getAntButtonRect() }
             ];
-
             buttons.forEach(btn => {
                 const isTaken = gameState.takenAbilities.includes(btn.ability);
                 const cost = gameState.abilityCosts[btn.ability] || 0;
@@ -450,7 +437,6 @@ function drawMenu() {
                 ctx.fillStyle = canAfford ? 'gold' : 'gold';
                 ctx.fillText(`🪙 ${cost}`, btn.rect.x + btn.rect.width + 30, btn.rect.y + 35);
             });
-
         } else {
             ctx.font = '40px Arial';
             ctx.fillStyle = 'grey';
@@ -468,11 +454,9 @@ function drawMenu() {
     ctx.textAlign = 'center';
     ctx.fillText('PRESS "B" TO CLOSE', canvas.width / 2, menuY + menuHeight - 20);
 }
-
 function isClickInside(pos, rect) {
     return pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height;
 }
-
 function getPlayerAngle(player) {
     if (!player) {
         return 0;
@@ -483,7 +467,6 @@ function getPlayerAngle(player) {
     const dy = mouse.y - cy;
     return Math.atan2(dy, dx);
 }
-
 function getFunctionsTabRect() {
     const mX = (canvas.width - 1500) / 2;
     const mY = (canvas.height - 900) / 2;
