@@ -432,8 +432,8 @@ function drawMenu() {
                 const canAfford = me.coins >= cost;
 
                 // Desenha o contorno e o texto do botão
-                ctx.fillStyle = isTaken ? '#888' : (canAfford ? 'white' : 'red');
-                ctx.strokeStyle = isTaken ? '#555' : (canAfford ? 'white' : 'grey');
+                ctx.fillStyle = isTaken ? '#888' : (canAfford ? 'white' : 'white');
+                ctx.strokeStyle = isTaken ? '#555' : (canAfford ? 'white' : 'white');
                 ctx.lineWidth = 3;
                 ctx.strokeRect(btn.rect.x - 10, btn.rect.y - 10, btn.rect.width + 10, btn.rect.height + 10);
 
@@ -445,7 +445,7 @@ function drawMenu() {
                 // Desenha o custo ao lado do botão
                 ctx.font = '30px Arial';
                 ctx.textAlign = 'left';
-                ctx.fillStyle = canAfford ? 'gold' : 'grey';
+                ctx.fillStyle = canAfford ? 'gold' : 'gold';
                 ctx.fillText(`🪙 ${cost}`, btn.rect.x + btn.rect.width + 30, btn.rect.y + 35);
             });
 
