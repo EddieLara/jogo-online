@@ -433,22 +433,20 @@ function drawMenu() {
 
                 // Desenha o contorno e o texto do botão
                 ctx.fillStyle = isTaken ? '#888' : (canAfford ? 'white' : 'red');
-                ctx.strokeStyle = isTaken ? '#555' : (canAfford ? 'white' : 'darkred');
+                ctx.strokeStyle = isTaken ? '#555' : (canAfford ? 'white' : 'grey');
                 ctx.lineWidth = 3;
                 ctx.strokeRect(btn.rect.x - 10, btn.rect.y - 10, btn.rect.width + 10, btn.rect.height + 10);
 
                 ctx.font = '40px Arial';
                 ctx.textAlign = 'center';
-                const buttonText = isTaken ? `${btn.text} (TAKEN)` : btn.text;
+                const buttonText = isTaken ? `${btn.text}` : btn.text;
                 ctx.fillText(buttonText, btn.rect.x + btn.rect.width / 2, btn.rect.y + 35);
 
                 // Desenha o custo ao lado do botão
                 ctx.font = '30px Arial';
                 ctx.textAlign = 'left';
-                ctx.fillStyle = canAfford ? 'gold' : 'red';
+                ctx.fillStyle = canAfford ? 'gold' : 'grey';
                 ctx.fillText(`🪙 ${cost}`, btn.rect.x + btn.rect.width + 30, btn.rect.y + 35);
-                
-                // O BLOCO DE CÓDIGO DO TOOLTIP FOI REMOVIDO DAQUI
             });
 
         } else {
