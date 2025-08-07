@@ -48,7 +48,7 @@ const ctx = canvas.getContext('2d');
 // --- FIM DO NOVO BLOCO DE CÓDIGO ---
 
 
-const socket = io('https://insfestation-io-medv.onrender.com');
+const socket = io('https://jogo-online-medv.onrender.com');
 
 // --- ASSETS E CONSTANTES ---
 function loadImage(src) {
