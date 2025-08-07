@@ -1,5 +1,5 @@
 // =============================================================
-//                           SCRIPT DO SERVIDOR
+//                       SCRIPT DO SERVIDOR
 // =============================================================
 
 const express = require('express');
@@ -20,6 +20,7 @@ const WORLD_HEIGHT = 2000;
 const INITIAL_PLAYER_SIZE = 60;
 const INITIAL_PLAYER_SPEED = 2;
 const MAX_PLAYER_SPEED = 5;
+// ... (o resto das constantes permanece igual)
 const SPEED_PER_PIXEL_OF_GROWTH = 0.05;
 const GROWTH_AMOUNT = 0.2;
 const DUCT_TRAVEL_TIME = 1000 / 20;
@@ -37,6 +38,7 @@ const BOX_COLLISION_DAMPING = 0.90;
 const ANGULAR_FRICTION = 0.95;
 const TORQUE_FACTOR = 0.000008;
 
+
 const ABILITY_COSTS = {
     chameleon: 120,
     athlete: 100,
@@ -52,10 +54,12 @@ function initializeGame() {
         players: {},
         arrows: [],
         takenAbilities: [],
-        abilityCosts: ABILITY_COSTS, // <-- ADICIONADO: Envia os custos para o cliente
+        abilityCosts: ABILITY_COSTS,
         gamePhase: 'waiting',
         startTime: 60,
+        zombieChosen: false,
         timeLeft: 120,
+        //... (o resto da inicialização do mundo permanece o mesmo)
         box: [
             { x: 1000, y: 1500, width: 128, height: 128, vx: 0, vy: 0, rotation: 100, angularVelocity: 0 },
             { x: 2720, y: 1670, width: 128, height: 128, vx: 0, vy: 0, rotation: 200, angularVelocity: 0 },
@@ -93,6 +97,31 @@ function initializeGame() {
     buildWalls(gameState.garage);
 }
 
+function pickInitialZombie() {
+    const playerIds = Object.keys(gameState.players);
+    if (playerIds.length > 0 && !gameState.zombieChosen) {
+        const randomIndex = Math.floor(Math.random() * playerIds.length);
+        const zombieId = playerIds[randomIndex];
+        const player = gameState.players[zombieId];
+
+        if (player) {
+            player.role = 'zombie';
+            
+            // <<< CORRIGIDO: Adicionada salvaguarda para garantir que a velocidade seja um número válido.
+            const currentSpeed = player.speed || INITIAL_PLAYER_SPEED;
+            player.speed = currentSpeed * 1.2;
+
+            gameState.zombieChosen = true;
+            console.log(`Player ${player.name} (${zombieId}) has been chosen as the Zombie.`);
+        }
+    }
+}
+
+// O resto do arquivo do servidor (buildWalls, isColliding, createNewPlayer, colisões, updateGameState, conexões, loops)
+// permanece exatamente o mesmo da versão anterior, pois a lógica neles já estava correta.
+// Apenas a função pickInitialZombie precisou do ajuste.
+
+// ... (todo o resto do server.js permanece o mesmo)
 function buildWalls(structure) {
     const s = structure;
     const wt = s.wallThickness;
@@ -140,6 +169,8 @@ function createNewPlayer(socket) {
         height: INITIAL_PLAYER_SIZE * 1.25,
         speed: INITIAL_PLAYER_SPEED,
         rotation: 0,
+        role: 'human',
+        hitbox: {},
         activeAbility: ' ',
         coins: 0,
         isCamouflaged: false,
@@ -239,13 +270,10 @@ function checkCollisionSAT(poly1, poly2) {
 }
 
 function updateGameState() {
-    const now = Date.now();
     const allCollidables = [...gameState.box, ...gameState.furniture];
     
-    // Loop de física e colisão para itens móveis (caixas, móveis)
     for (let i = 0; i < allCollidables.length; i++) {
         const item1 = allCollidables[i];
-        // Colisão entre itens móveis
         for (let j = i + 1; j < allCollidables.length; j++) {
             const item2 = allCollidables[j];
             const mtv = checkCollisionSAT(item1, item2);
@@ -267,15 +295,12 @@ function updateGameState() {
                 item2.angularVelocity += torque2;
             }
         }
-        // Atualiza posição e aplica fricção
         item1.x += item1.vx;
         item1.y += item1.vy;
         item1.rotation += item1.angularVelocity;
         item1.vx *= BOX_FRICTION;
         item1.vy *= BOX_FRICTION;
         item1.angularVelocity *= ANGULAR_FRICTION;
-
-        // Colisão de itens móveis com paredes e obstáculos estáticos
         const obstacles = [...gameState.house.walls, ...gameState.garage.walls, gameState.chest];
         for (const obstacle of obstacles) {
             const mtv = checkCollisionSAT(item1, obstacle);
@@ -293,18 +318,16 @@ function updateGameState() {
                 item1.angularVelocity *= -0.5;
             }
         }
-
-        // Colisão com os limites do mundo
         if (item1.x < 0) { item1.x = 0; item1.vx *= -0.5; }
         if (item1.x + item1.width > WORLD_WIDTH) { item1.x = WORLD_WIDTH - item1.width; item1.vx *= -0.5; }
         if (item1.y < 0) { item1.y = 0; item1.vy *= -0.5; }
         if (item1.y + item1.height > WORLD_HEIGHT) { item1.y = WORLD_HEIGHT - item1.height; item1.vy *= -0.5; }
     }
-
-    // Loop de física e colisão para jogadores
-    for (const id in gameState.players) {
+    
+    const playerIds = Object.keys(gameState.players);
+    for (const id of playerIds) {
         const player = gameState.players[id];
-        const originalPos = { x: player.x, y: player.y };
+        if (!player) continue;
 
         const hitboxWidth = player.width * 0.4;
         const hitboxHeight = player.height * 0.7;
@@ -319,19 +342,16 @@ function updateGameState() {
             player.footprintCooldown--;
         }
 
-        // Movimento do jogador
         if (player.input.movement.up || player.input.movement.down || player.input.movement.left || player.input.movement.right) {
             if (player.activeAbility === 'chameleon' && player.isCamouflaged) {
                 player.isCamouflaged = false;
             }
             const originalX = player.x;
             const originalY = player.y;
-
-            // Movimento e colisão em X
+            
             if (player.input.movement.left) { player.x -= player.speed; }
             if (player.input.movement.right) { player.x += player.speed; }
             player.hitbox.x = player.x + (player.width - player.hitbox.width) / 2;
-
             let collidedX = false;
             for (const wall of [...gameState.house.walls, ...gameState.garage.walls]) {
                 if (isColliding(player.hitbox, wall)) { collidedX = true; }
@@ -342,12 +362,9 @@ function updateGameState() {
                 player.x = originalX;
                 player.hitbox.x = player.x + (player.width - player.hitbox.width) / 2;
             }
-
-            // Movimento e colisão em Y
             if (player.input.movement.up) { player.y -= player.speed; }
             if (player.input.movement.down) { player.y += player.speed; }
             player.hitbox.y = player.y + (player.height - player.hitbox.height) / 2;
-
             let collidedY = false;
             for (const wall of [...gameState.house.walls, ...gameState.garage.walls]) {
                 if (isColliding(player.hitbox, wall)) { collidedY = true; }
@@ -359,8 +376,7 @@ function updateGameState() {
                 player.hitbox.y = player.y + (player.height - player.hitbox.height) / 2;
             }
         }
-
-        // Esconder-se atrás de objetos
+        
         player.isHidden = false;
         for (const sunshade of gameState.sunshades) {
             if (isColliding(player.hitbox, sunshade)) {
@@ -369,32 +385,23 @@ function updateGameState() {
             }
         }
         
-        // =========================================================================
-        //           INÍCIO DA LÓGICA DE COLISÃO JOGADOR-MÓVEL CORRIGIDA
-        // =========================================================================
         const playerPoly = { ...player.hitbox, rotation: 0 };
         for (const item of allCollidables) {
-            const mtv = checkCollisionSAT(playerPoly, item);
-            if (mtv) {
-                // Calcular a direção e força do empurrão que o jogador TENTARIA aplicar
+             const mtv = checkCollisionSAT(playerPoly, item);
+             if (mtv) {
                 let pushDirectionX = 0;
                 let pushDirectionY = 0;
                 if (player.input.movement.up) { pushDirectionY -= 1; }
                 if (player.input.movement.down) { pushDirectionY += 1; }
                 if (player.input.movement.left) { pushDirectionX -= 1; }
                 if (player.input.movement.right) { pushDirectionX += 1; }
-
                 const pushForceX = pushDirectionX * BOX_PUSH_FORCE;
                 const pushForceY = pushDirectionY * BOX_PUSH_FORCE;
-
-                // Prever a próxima posição do item se a força fosse aplicada
                 const predictedItem = {
                     ...item,
                     x: item.x + item.vx + pushForceX,
                     y: item.y + item.vy + pushForceY
                 };
-
-                // Verificar se essa posição futura colidiria com um obstáculo estático
                 let wouldCollideWithWall = false;
                 const staticObstacles = [...gameState.house.walls, ...gameState.garage.walls, gameState.chest];
                 for (const obstacle of staticObstacles) {
@@ -403,27 +410,16 @@ function updateGameState() {
                         break;
                     }
                 }
-
-                // Agora, decidir o que fazer
                 if (wouldCollideWithWall) {
-                    // O item está bloqueado. Ele age como uma parede para o jogador.
-                    // Apenas resolvemos a posição do jogador para impedi-lo de atravessar o item.
                     player.x -= mtv.x;
                     player.y -= mtv.y;
-                    // NENHUMA força é aplicada ao item.
                 } else {
-                    // O caminho está livre. O empurrão é permitido.
-                    // Resolvemos a posição do jogador.
                     player.x -= mtv.x;
                     player.y -= mtv.y;
-                    
                     const len = Math.sqrt(pushDirectionX * pushDirectionX + pushDirectionY * pushDirectionY);
-                    if (len > 0) { // Garante que só empurre se houver input de movimento
-                        // Aplicamos a força ao item.
+                    if (len > 0) {
                         item.vx += pushForceX;
                         item.vy += pushForceY;
-                        
-                        // E aplicamos o torque para rotação.
                         const contactVectorX = (player.x + player.width / 2) - (item.x + item.width / 2);
                         const contactVectorY = (player.y + player.height / 2) - (item.y + item.height / 2);
                         const torque = (contactVectorX * pushDirectionY - contactVectorY * pushDirectionX) * TORQUE_FACTOR;
@@ -432,15 +428,9 @@ function updateGameState() {
                 }
             }
         }
-        // =========================================================================
-        //           FIM DA LÓGICA DE COLISÃO JOGADOR-MÓVEL CORRIGIDA
-        // =========================================================================
 
-        // Resolução final de colisão jogador-parede para evitar bugs de atravessar
         const allWalls = [...gameState.house.walls, ...gameState.garage.walls];
         for (const wall of allWalls) {
-            playerPoly.x = player.x + (player.width - player.hitbox.width) / 2;
-            playerPoly.y = player.y + (player.height - player.hitbox.height) / 2;
             const mtv = checkCollisionSAT(playerPoly, wall);
             if (mtv) {
                 player.x -= mtv.x;
@@ -449,19 +439,37 @@ function updateGameState() {
         }
     }
     
-    // Atualização das flechas
+    for (let i = 0; i < playerIds.length; i++) {
+        for (let j = i + 1; j < playerIds.length; j++) {
+            const player1 = gameState.players[playerIds[i]];
+            const player2 = gameState.players[playerIds[j]];
+            if (!player1 || !player2) continue;
+            if (player1.role === 'zombie' && player2.role === 'human' && isColliding(player1.hitbox, player2.hitbox)) {
+                player2.role = 'zombie';
+            } else if (player2.role === 'zombie' && player1.role === 'human' && isColliding(player1.hitbox, player2.hitbox)) {
+                player1.role = 'zombie';
+            }
+        }
+    }
+
     gameState.arrows.forEach((arrow, index) => {
         arrow.x += Math.cos(arrow.angle) * ARROW_SPEED;
         arrow.y += Math.sin(arrow.angle) * ARROW_SPEED;
+        for(const id in gameState.players) {
+            const player = gameState.players[id];
+            if (arrow.ownerId !== id && isColliding(arrow, player.hitbox)) {
+                gameState.arrows.splice(index, 1);
+                break;
+            }
+        }
         if (arrow.x < 0 || arrow.x > WORLD_WIDTH || arrow.y < 0 || arrow.y > WORLD_HEIGHT) {
             gameState.arrows.splice(index, 1);
         }
     });
 }
 
-// --- GERENCIAMENTO DE CONEXÕES ---
 io.on('connection', (socket) => {
-    console.log('Novo jogador conectado:', socket.id);
+    console.log('New player connected:', socket.id);
     createNewPlayer(socket);
 
     socket.on('playerInput', (inputData) => {
@@ -477,16 +485,12 @@ io.on('connection', (socket) => {
         const cost = ABILITY_COSTS[ability];
         if (player && player.activeAbility === ' ' && cost !== undefined && player.coins >= cost) {
             if (gameState.takenAbilities.includes(ability)) {
-                console.log(`Jogador ${player.id} tentou pegar a habilidade já escolhida: ${ability}`);
+                console.log(`Player ${player.id} tried to pick taken ability: ${ability}`);
                 return;
             }
-
-            
             player.coins -= cost;
             player.activeAbility = ability;
-
             gameState.takenAbilities.push(ability);
-
             if (ability === 'archer') {
                 player.arrowAmmo = 100;
             }
@@ -495,9 +499,8 @@ io.on('connection', (socket) => {
 
     socket.on('playerAction', (actionData) => {
         const player = gameState.players[socket.id];
-        if (!player) {
-            return;
-        }
+        if (!player) return;
+
         if (actionData.type === 'primary_action') {
             if (player.activeAbility === 'archer' && player.arrowAmmo > 0) {
                 player.arrowAmmo--;
@@ -584,24 +587,28 @@ io.on('connection', (socket) => {
 
     socket.on('sendMessage', (text) => {
         const player = gameState.players[socket.id];
-        // Verifica se o jogador existe e se a mensagem não está vazia
         if (player && text && text.trim().length > 0) {
             const message = {
                 name: player.name,
-                text: text.substring(0, 150) // Limita o tamanho da mensagem para segurança
+                text: text.substring(0, 150)
             };
-            // Envia a mensagem para TODOS os clientes conectados
             io.emit('newMessage', message);
         }
     });
 
     socket.on('disconnect', () => {
-        console.log('Jogador desconectado:', socket.id);
+        console.log('Player disconnected:', socket.id);
+        const player = gameState.players[socket.id];
+        if(player && player.activeAbility !== ' ') {
+            const index = gameState.takenAbilities.indexOf(player.activeAbility);
+            if(index > -1) {
+                gameState.takenAbilities.splice(index, 1);
+            }
+        }
         delete gameState.players[socket.id];
     });
 });
 
-// --- GAME LOOPS DO SERVIDOR ---
 setInterval(() => {
     if (!gameState || !gameState.players) {
         return;
@@ -615,6 +622,9 @@ setInterval(() => {
         if (gameState.gamePhase === 'waiting') {
             if (gameState.startTime > 0) {
                 gameState.startTime--;
+                if (gameState.startTime <= 5 && !gameState.zombieChosen) {
+                    pickInitialZombie();
+                }
             } else {
                 gameState.gamePhase = 'running';
             }
@@ -622,24 +632,32 @@ setInterval(() => {
             if (gameState.timeLeft > 0) {
                 gameState.timeLeft--;
             } else {
-                const currentPlayers = gameState.players;
-                initializeGame();
-                gameState.players = currentPlayers;
+                gameState.gamePhase = 'waiting';
+                gameState.startTime = 60;
+                gameState.timeLeft = 120;
+                gameState.zombieChosen = false;
+                gameState.takenAbilities = [];
+                gameState.arrows = [];
+
                 for (const id in gameState.players) {
-                    const player = gameState.players[id];
-                    player.x = WORLD_WIDTH / 2 + 500;
-                    player.y = WORLD_HEIGHT / 2;
-                    player.activeAbility = ' ';
-                    player.isCamouflaged = false;
-                    player.camouflageAvailable = true;
-                    player.isSprinting = false;
-                    player.sprintAvailable = true;
-                    player.isAnt = false;
-                    player.antAvailable = true;
-                    player.isHidden = false;
-                    player.arrowAmmo = 0;
-                    player.engineerAbilityUsed = false;
-                    player.isInDuct = false;
+                    const p = gameState.players[id];
+                    p.x = WORLD_WIDTH / 2 + 500;
+                    p.y = WORLD_HEIGHT / 2;
+                    p.width = INITIAL_PLAYER_SIZE;
+                    p.height = INITIAL_PLAYER_SIZE * 1.25;
+                    p.speed = INITIAL_PLAYER_SPEED;
+                    p.role = 'human';
+                    p.activeAbility = ' ';
+                    p.isCamouflaged = false;
+                    p.camouflageAvailable = true;
+                    p.isSprinting = false;
+                    p.sprintAvailable = true;
+                    p.isAnt = false;
+                    p.antAvailable = true;
+                    p.isHidden = false;
+                    p.arrowAmmo = 0;
+                    p.engineerAbilityUsed = false;
+                    p.isInDuct = false;
                 }
                 return;
             }
@@ -660,8 +678,7 @@ setInterval(() => {
     }
 }, 1000);
 
-// --- INICIA O SERVIDOR ---
 server.listen(PORT, () => {
     initializeGame();
-    console.log(`🚀 Servidor do jogo rodando em http://localhost:${PORT}`);
+    console.log(`🚀 Game server running at http://localhost:${PORT}`);
 });

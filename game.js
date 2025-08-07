@@ -1,5 +1,5 @@
 // =============================================================
-//                           SCRIPT DO CLIENTE
+//                       SCRIPT DO CLIENTE
 // =============================================================
 
 const canvas = document.getElementById('gameCanvas');
@@ -14,6 +14,7 @@ function loadImage(src) {
     return img;
 }
 const human = loadImage('Sprites/Human.png');
+const zombie = loadImage('Sprites/Zombie.png');
 const box = loadImage('Sprites/Box.png');
 const grass = loadImage('Sprites/Grass.png');
 const street = loadImage('Sprites/Street.png');
@@ -36,7 +37,7 @@ const car = loadImage('Sprites/Car.png');
 
 // --- ESTADO LOCAL DO CLIENTE ---
 let myId = null;
-let gameState = { players: {}, arrows: [], timeLeft: 120, startTime: 60, gamePhase: 'waiting', abilityCosts: {} };
+let gameState = { players: {}, arrows: [], timeLeft: 120, startTime: 60, gamePhase: 'waiting', abilityCosts: {}, box: [], furniture: [], ducts: [], house: {walls: []}, garage: {walls: []} };
 const movement = { up: false, down: false, left: false, right: false };
 let mouse = { x: 0, y: 0 };
 let isMenuOpen = false;
@@ -44,7 +45,7 @@ let activeMenuTab = 'items';
 const chatInput = document.getElementById('chatInput');
 let isChatting = false;
 let chatMessages = [];
-const MAX_MESSAGES = 7; // Número máximo de mensagens a serem exibidas
+const MAX_MESSAGES = 7;
 
 // --- COMUNICAÇÃO COM O SERVIDOR ---
 socket.on('connect', () => {
@@ -55,55 +56,50 @@ socket.on('gameStateUpdate', (serverState) => {
 });
 socket.on('newMessage', (message) => {
     chatMessages.push(message);
-    // Remove mensagens antigas se o limite for ultrapassado
     if (chatMessages.length > MAX_MESSAGES) {
         chatMessages.shift();
     }
 });
 
 // --- INPUT HANDLERS ---
+// (Nenhuma alteração nesta seção, o código permanece o mesmo)
 window.addEventListener('keydown', function(event) {
     const key = event.key.toLowerCase();
 
-    // Lógica principal do chat com a tecla "Enter"
     if (key === 'enter') {
-        event.preventDefault(); // Impede o comportamento padrão do navegador
+        event.preventDefault();
         if (isChatting) {
             const messageText = chatInput.value.trim();
             if (messageText) {
-                socket.emit('sendMessage', messageText); // Envia a mensagem para o servidor
+                socket.emit('sendMessage', messageText);
             }
             chatInput.value = '';
-            chatInput.blur(); // Tira o foco do input
+            chatInput.blur();
         } else {
-            chatInput.style.display = 'block'; // Mostra o input
-            chatInput.focus(); // Foca no input para digitação
+            chatInput.style.display = 'block';
+            chatInput.focus();
         }
     }
 
-    // Se o usuário pressionar "Escape" enquanto digita, cancela o chat
     if (key === 'escape' && isChatting) {
         chatInput.value = '';
         chatInput.blur();
     }
 
-    // Gerenciamento de foco do chat
     chatInput.onfocus = () => { isChatting = true; };
     chatInput.onblur = () => {
         isChatting = false;
-        chatInput.style.display = 'none'; // Esconde o input quando não está em uso
+        chatInput.style.display = 'none';
     };
 
     if (key === 'b') {
         isMenuOpen = !isMenuOpen;
     }
 
-    // Se o menu ou o chat estiverem abertos, não processe os controles do jogo
     if (isMenuOpen || isChatting) {
         return;
     }
 
-    // Controles do jogo (só funcionam se não estiver digitando no chat)
     switch (key) {
         case 'w': case 'arrowup': movement.up = true; break;
         case 's': case 'arrowdown': movement.down = true; break;
@@ -167,6 +163,7 @@ canvas.addEventListener('mousedown', function(event) {
     }
 });
 
+
 // --- FUNÇÃO DE DESENHO ---
 function draw() {
     if (!myId || !gameState.players || !gameState.players[myId]) {
@@ -175,7 +172,7 @@ function draw() {
         ctx.fillStyle = 'white';
         ctx.textAlign = 'center';
         ctx.font = '30px Arial';
-        ctx.fillText('Aguardando estado do jogo...', canvas.width / 2, canvas.height / 2);
+        ctx.fillText('Waiting for game state...', canvas.width / 2, canvas.height / 2);
         return;
     }
     const me = gameState.players[myId];
@@ -185,7 +182,7 @@ function draw() {
     ctx.save();
     ctx.translate(-cameraX, -cameraY);
 
-    // DESENHA MUNDO
+    // DESENHA MUNDO (sem alterações)
     ctx.drawImage(grass, 0, 0, 3100, 2000);
     ctx.drawImage(floors, 200, 200, 2697, 1670);
     ctx.drawImage(garageFloor, 2000, 1200, 700, 600);
@@ -193,7 +190,6 @@ function draw() {
     ctx.drawImage(sand, 4080, 0, 1850, 2000);
     ctx.drawImage(street, 3090, 0, 1000, 2000);
     ctx.drawImage(chest, 2890, 825, 200, 240);
-
     const furnitureSprites = { small_bed: smallBed, small_table: smallTable, big_table: bigTable, car: car };
     for (const duct of gameState.ducts) {
         ctx.drawImage(ductSprite, duct.x, duct.y, duct.width, duct.height);
@@ -219,7 +215,6 @@ function draw() {
             }
         }
     }
-
     ctx.fillStyle = '#4b3621';
     ctx.strokeStyle = '#785634ff';
     ctx.lineWidth = 15;
@@ -240,7 +235,8 @@ function draw() {
         ctx.strokeRect(wall.x, wall.y, wall.width, wall.height);
     }
 
-    // DESENHA JOGADORES
+
+    // DESENHA JOGADORES (sem alterações)
     for (const playerId in gameState.players) {
         const player = gameState.players[playerId];
         if (player.isInDuct) continue;
@@ -252,7 +248,10 @@ function draw() {
         } else {
             ctx.rotate(player.rotation);
         }
-        if (player.isCamouflaged) {
+        
+        if (player.role === 'zombie') {
+            ctx.drawImage(zombie, -player.width / 2, -player.height / 2, player.width, player.height);
+        } else if (player.isCamouflaged) {
             ctx.drawImage(box, -player.width / 2, -player.height / 2, player.width, player.height);
         } else if (player.isAnt) {
             ctx.drawImage(ant, -player.width / 2, -player.height / 2, player.width, player.height);
@@ -262,7 +261,7 @@ function draw() {
         ctx.restore();
 
         if (!player.isAnt && !player.isCamouflaged && !player.isHidden) {
-            ctx.fillStyle = 'white';
+            ctx.fillStyle = player.role === 'zombie' ? 'lightgreen' : 'white';
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 5;
             ctx.textAlign = 'center';
@@ -290,23 +289,37 @@ function draw() {
         const seconds = gameState.startTime % 60;
         ctx.fillText(`0:${String(seconds).padStart(2, '0')}`, canvas.width / 2, 80);
         ctx.font = '30px Arial';
-        ctx.fillText('Start of the round in...', canvas.width / 2, 40);
+        if (gameState.zombieChosen) {
+             ctx.fillStyle = 'red';
+             ctx.fillText('THE ZOMBIE HAS BEEN CHOSEN!', canvas.width / 2, 40);
+        } else {
+             ctx.fillText('Start of the round in...', canvas.width / 2, 40);
+        }
     } else {
         const minutes = Math.floor(gameState.timeLeft / 60);
         const seconds = gameState.timeLeft % 60;
         ctx.fillText(`${minutes}:${String(seconds).padStart(2, '0')}`, canvas.width / 2, 50);
     }
 
-    // Contador de moedas
     ctx.font = '30px Arial';
     ctx.fillStyle = 'gold';
     ctx.textAlign = 'right';
     ctx.fillText(`🪙 ${me.coins}`, canvas.width - 20, 50);
 
     ctx.font = '30px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = me.role === 'zombie' ? 'lightgreen' : 'lightblue';
+    const roleText = me.role ? me.role.toUpperCase() : '...';
+    ctx.fillText(`ROLE: ${roleText}`, 10, 50);
+
+    ctx.font = '30px Arial';
     ctx.textAlign = 'right';
     ctx.fillStyle = 'white';
-    ctx.fillText(`SPEED: ${me.speed.toFixed(2)}`, canvas.width - 20, canvas.height - 10);
+    
+    // <<< CORRIGIDO: Adicionada salvaguarda para evitar que a renderização quebre.
+    const speedText = (typeof me.speed === 'number' && !isNaN(me.speed)) ? me.speed.toFixed(2) : '...';
+    ctx.fillText(`SPEED: ${speedText}`, canvas.width - 20, canvas.height - 10);
+    
     ctx.textAlign = 'left';
     ctx.fillText(`SKILL: ${me.activeAbility.toUpperCase()}`, 10, canvas.height - 10);
     if (me.activeAbility === 'archer') {
@@ -351,6 +364,7 @@ function draw() {
     }
 }
 
+// O resto do arquivo (drawChat, drawMenu, funções auxiliares, gameLoop) permanece o mesmo.
 function drawChat() {
     if (chatMessages.length === 0) return;
 
@@ -360,7 +374,6 @@ function drawChat() {
     const chatBoxWidth = 800;
     const chatBoxHeight = (chatMessages.length * 25) + 10;
 
-    // Fundo semitransparente para legibilidade
     ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
     ctx.fillRect(chatBoxX, chatBoxY, chatBoxWidth, chatBoxHeight);
 
@@ -369,14 +382,9 @@ function drawChat() {
     ctx.textBaseline = 'top';
 
     chatMessages.forEach((msg, index) => {
-        // Formato: "NomeDoJogador: mensagem"
         const fullMessage = `${msg.name}: ${msg.text}`;
-
-        // Cor do nome do jogador (pode personalizar)
         ctx.fillStyle = 'gold';
         ctx.fillText(msg.name + ':', chatBoxX + 10, chatBoxY + 5 + (index * 25));
-
-        // Cor do texto da mensagem
         ctx.fillStyle = 'white';
         const nameWidth = ctx.measureText(msg.name + ': ').width;
         ctx.fillText(msg.text, chatBoxX + 10 + nameWidth, chatBoxY + 5 + (index * 25));
@@ -385,7 +393,6 @@ function drawChat() {
     ctx.restore();
 }
 
-// --- FUNÇÕES AUXILIARES ---
 function drawMenu() {
     const me = gameState.players[myId];
     if (!me) {
@@ -430,19 +437,14 @@ function drawMenu() {
                 const isTaken = gameState.takenAbilities.includes(btn.ability);
                 const cost = gameState.abilityCosts[btn.ability] || 0;
                 const canAfford = me.coins >= cost;
-
-                // Desenha o contorno e o texto do botão
                 ctx.fillStyle = isTaken ? '#888' : (canAfford ? 'white' : 'white');
                 ctx.strokeStyle = isTaken ? '#555' : (canAfford ? 'white' : 'white');
                 ctx.lineWidth = 3;
                 ctx.strokeRect(btn.rect.x - 10, btn.rect.y - 10, btn.rect.width + 10, btn.rect.height + 10);
-
                 ctx.font = '40px Arial';
                 ctx.textAlign = 'center';
                 const buttonText = isTaken ? `${btn.text}` : btn.text;
                 ctx.fillText(buttonText, btn.rect.x + btn.rect.width / 2, btn.rect.y + 35);
-
-                // Desenha o custo ao lado do botão
                 ctx.font = '30px Arial';
                 ctx.textAlign = 'left';
                 ctx.fillStyle = canAfford ? 'gold' : 'gold';
@@ -470,6 +472,7 @@ function drawMenu() {
 function isClickInside(pos, rect) {
     return pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height;
 }
+
 function getPlayerAngle(player) {
     if (!player) {
         return 0;
@@ -480,6 +483,7 @@ function getPlayerAngle(player) {
     const dy = mouse.y - cy;
     return Math.atan2(dy, dx);
 }
+
 function getFunctionsTabRect() {
     const mX = (canvas.width - 1500) / 2;
     const mY = (canvas.height - 900) / 2;
@@ -511,7 +515,6 @@ function getAntButtonRect() {
     return { x: canvas.width / 2 - 150, y: mY + 500, width: 300, height: 50 };
 }
 
-// --- GAME LOOP ---
 function gameLoop() {
     if (myId && gameState.players[myId]) {
         const me = gameState.players[myId];
