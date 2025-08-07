@@ -5,7 +5,50 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-const socket = io();
+// --- NOVO BLOCO DE CÓDIGO PARA CONFIGURAÇÃO INICIAL ---
+// Este bloco garante que a página e o canvas sejam preparados ANTES de qualquer outra coisa.
+(function setup() {
+    const chatInput = document.getElementById('chatInput');
+    const body = document.body;
+
+    // 1. Estiliza o corpo da página via JavaScript
+    body.style.backgroundColor = '#000000';
+    body.style.margin = '0';
+    body.style.overflow = 'hidden';
+
+    // 2. Estiliza o campo de chat via JavaScript
+    chatInput.style.display = 'none';
+    chatInput.style.position = 'absolute';
+    chatInput.style.bottom = '20px';
+    chatInput.style.left = '50%';
+    chatInput.style.transform = 'translateX(-50%)';
+    chatInput.style.width = '50%';
+    chatInput.style.maxWidth = '800px';
+    chatInput.style.padding = '10px';
+    chatInput.style.fontSize = '16px';
+    chatInput.style.border = '2px solid #555';
+    chatInput.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    chatInput.style.color = 'white';
+    chatInput.style.borderRadius = '8px';
+    chatInput.style.outline = 'none';
+    chatInput.style.zIndex = '10';
+
+    // 3. Função para redimensionar o canvas
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+
+    // Chama a função para definir o tamanho inicial
+    resizeCanvas();
+
+    // Adiciona o ouvinte para redimensionar no futuro
+    window.addEventListener('resize', resizeCanvas);
+})();
+// --- FIM DO NOVO BLOCO DE CÓDIGO ---
+
+
+const socket = io('https://jogo-online-medv.onrender.com');
 
 // --- ASSETS E CONSTANTES ---
 function loadImage(src) {
@@ -408,7 +451,7 @@ function drawMenu() {
                 ctx.fillText(buttonText, btn.rect.x + btn.rect.width / 2, btn.rect.y + 35);
                 ctx.font = '30px Arial';
                 ctx.textAlign = 'left';
-                ctx.fillStyle = canAfford ? 'gold' : 'gold';
+                ctx.fillStyle = canAfford ? 'gold' : 'red';
                 ctx.fillText(`🪙 ${cost}`, btn.rect.x + btn.rect.width + 30, btn.rect.y + 35);
             });
         } else {
@@ -471,6 +514,7 @@ function getAntButtonRect() {
     return { x: canvas.width / 2 - 150, y: mY + 500, width: 300, height: 50 };
 }
 
+// --- GAME LOOP ---
 function gameLoop() {
     if (myId && gameState.players[myId]) {
         const me = gameState.players[myId];
@@ -480,4 +524,6 @@ function gameLoop() {
     draw();
     requestAnimationFrame(gameLoop);
 }
+
+// Inicia o jogo
 gameLoop();
