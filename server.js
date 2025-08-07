@@ -36,7 +36,9 @@ const BOX_PUSH_FORCE = 0.10;
 const BOX_COLLISION_DAMPING = 0.90;
 const ANGULAR_FRICTION = 0.95;
 const TORQUE_FACTOR = 0.000008;
-const ZOMBIE_SPEED_BOOST = 1.15; // --- ADICIONADO: Bônus de velocidade para zumbis
+const ZOMBIE_SPEED_BOOST = 1.15;
+
+const ROUND_DURATION = 120; // 2 minutos
 
 const ABILITY_COSTS = {
     chameleon: 120,
@@ -56,7 +58,7 @@ function initializeGame() {
         abilityCosts: ABILITY_COSTS,
         gamePhase: 'waiting',
         startTime: 60,
-        timeLeft: 120,
+        timeLeft: ROUND_DURATION,
         box: [
             { x: 1000, y: 1500, width: 128, height: 128, vx: 0, vy: 0, rotation: 100, angularVelocity: 0 },
             { x: 2720, y: 1670, width: 128, height: 128, vx: 0, vy: 0, rotation: 200, angularVelocity: 0 },
@@ -141,7 +143,7 @@ function createNewPlayer(socket) {
         height: INITIAL_PLAYER_SIZE * 1.25,
         speed: INITIAL_PLAYER_SPEED,
         rotation: 0,
-        role: 'human', // --- ADICIONADO: Define o papel inicial como humano
+        role: 'human',
         activeAbility: ' ',
         coins: 0,
         isCamouflaged: false,
@@ -164,7 +166,6 @@ function createNewPlayer(socket) {
     };
 }
 
-// ... (O resto das funções auxiliares como getVertices, getAxes, project, checkCollisionSAT permanecem as mesmas)
 function getVertices(rect) {
     const vertices = [];
     const cx = rect.x + rect.width / 2;
@@ -186,6 +187,7 @@ function getVertices(rect) {
     }
     return vertices;
 }
+
 function getAxes(vertices) {
     const axes = [];
     for (let i = 0; i < vertices.length; i++) {
@@ -198,6 +200,7 @@ function getAxes(vertices) {
     }
     return [axes[0], axes[1]];
 }
+
 function project(vertices, axis) {
     let min = Infinity;
     let max = -Infinity;
@@ -208,6 +211,7 @@ function project(vertices, axis) {
     }
     return { min, max };
 }
+
 function checkCollisionSAT(poly1, poly2) {
     const vertices1 = getVertices(poly1);
     const vertices2 = getVertices(poly2);
@@ -238,13 +242,9 @@ function checkCollisionSAT(poly1, poly2) {
     return mtv;
 }
 
-
 function updateGameState() {
-    const now = Date.now();
     const allCollidables = [...gameState.box, ...gameState.furniture];
 
-    // Loop de física e colisão para itens móveis (caixas, móveis)
-    // ... (Esta parte do código permanece a mesma)
     for (let i = 0; i < allCollidables.length; i++) {
         const item1 = allCollidables[i];
         for (let j = i + 1; j < allCollidables.length; j++) {
@@ -297,12 +297,8 @@ function updateGameState() {
         if (item1.y + item1.height > WORLD_HEIGHT) { item1.y = WORLD_HEIGHT - item1.height; item1.vy *= -0.5; }
     }
 
-
-    // Loop de física e colisão para jogadores
     for (const id in gameState.players) {
         const player = gameState.players[id];
-        // ... (Esta parte do código de movimento do jogador e colisão com paredes permanece a mesma)
-        const originalPos = { x: player.x, y: player.y };
         const hitboxWidth = player.width * 0.4;
         const hitboxHeight = player.height * 0.7;
         player.hitbox = {
@@ -311,9 +307,6 @@ function updateGameState() {
             x: player.x + (player.width - hitboxWidth) / 2,
             y: player.y + (player.height - hitboxHeight) / 2,
         };
-        if (player.footprintCooldown > 0) {
-            player.footprintCooldown--;
-        }
         if (player.input.movement.up || player.input.movement.down || player.input.movement.left || player.input.movement.right) {
             if (player.activeAbility === 'chameleon' && player.isCamouflaged) {
                 player.isCamouflaged = false;
@@ -407,70 +400,55 @@ function updateGameState() {
                 player.y -= mtv.y;
             }
         }
-
     }
 
-    // --- ADICIONADO: Lógica do modo Zumbi ---
-    if (gameState.gamePhase === 'zombie') {
+    if (gameState.gamePhase === 'running') {
         const players = gameState.players;
         const playerIds = Object.keys(players);
         let humanCount = 0;
-
-        // Itera para verificar colisões de infecção
+        let hasZombies = false;
         for (const id1 of playerIds) {
             const player1 = players[id1];
             if (player1.role === 'zombie') {
+                hasZombies = true;
                 for (const id2 of playerIds) {
                     if (id1 === id2) continue;
                     const player2 = players[id2];
                     if (player2.role === 'human' && isColliding(player1.hitbox, player2.hitbox)) {
                         player2.role = 'zombie';
-                        player2.speed *= ZOMBIE_SPEED_BOOST; // Aumenta a velocidade do novo zumbi
+                        player2.speed *= ZOMBIE_SPEED_BOOST;
                         console.log(`${player2.name} foi infectado!`);
+                        io.emit('newMessage', { name: 'Servidor', text: `${player2.name} foi infectado!` });
                     }
                 }
             }
         }
-
-        // Conta quantos humanos restam
-        for (const id of playerIds) {
-            if (players[id].role === 'human') {
-                humanCount++;
+        if (hasZombies) {
+            for (const id of playerIds) {
+                if (players[id].role === 'human') {
+                    humanCount++;
+                }
             }
-        }
-
-        // Se não houver mais humanos, reinicia o jogo
-        if (humanCount === 0 && playerIds.length > 0) {
-            console.log("Todos os humanos foram infectados! Reiniciando a partida.");
-            // Mantém os jogadores atuais, mas reinicia o estado do jogo
-            const currentPlayers = gameState.players;
-            initializeGame(); // Reseta o estado geral do jogo
-            gameState.players = currentPlayers; // Recoloca os jogadores na nova partida
-            // Reseta o estado individual de cada jogador para a nova partida
-            for (const id in gameState.players) {
-                const player = gameState.players[id];
-                player.x = WORLD_WIDTH / 2 + 500;
-                player.y = WORLD_HEIGHT / 2;
-                player.role = 'human'; // Todos voltam a ser humanos
-                player.activeAbility = ' ';
-                player.coins = 0;
-                // Reseta outros status
-                player.isCamouflaged = false;
-                player.camouflageAvailable = true;
-                player.isSprinting = false;
-                player.sprintAvailable = true;
-                player.isAnt = false;
-                player.antAvailable = true;
-                player.isHidden = false;
-                player.arrowAmmo = 0;
-                player.engineerAbilityUsed = false;
-                player.isInDuct = false;
+            if (humanCount === 0 && playerIds.length > 0) {
+                console.log("Todos os humanos foram infectados! Reiniciando a partida.");
+                io.emit('newMessage', { name: 'Servidor', text: 'Os Zumbis venceram!' });
+                const currentPlayers = gameState.players;
+                initializeGame();
+                gameState.players = currentPlayers;
+                for (const id in gameState.players) {
+                    const player = gameState.players[id];
+                    player.x = WORLD_WIDTH / 2 + 500;
+                    player.y = WORLD_HEIGHT / 2;
+                    player.role = 'human';
+                    player.activeAbility = ' ';
+                    player.width = INITIAL_PLAYER_SIZE;
+                    player.height = INITIAL_PLAYER_SIZE * 1.25;
+                    player.speed = INITIAL_PLAYER_SPEED;
+                }
             }
         }
     }
 
-
-    // Atualização das flechas
     gameState.arrows.forEach((arrow, index) => {
         arrow.x += Math.cos(arrow.angle) * ARROW_SPEED;
         arrow.y += Math.sin(arrow.angle) * ARROW_SPEED;
@@ -480,7 +458,6 @@ function updateGameState() {
     });
 }
 
-// ... (O gerenciamento de conexões 'io.on('connection', ...)' permanece quase o mesmo, com pequenas adições ou verificações)
 io.on('connection', (socket) => {
     console.log('Novo jogador conectado:', socket.id);
     createNewPlayer(socket);
@@ -498,14 +475,11 @@ io.on('connection', (socket) => {
         const cost = ABILITY_COSTS[ability];
         if (player && player.activeAbility === ' ' && cost !== undefined && player.coins >= cost) {
             if (gameState.takenAbilities.includes(ability)) {
-                console.log(`Jogador ${player.id} tentou pegar a habilidade já escolhida: ${ability}`);
                 return;
             }
-
             player.coins -= cost;
             player.activeAbility = ability;
             gameState.takenAbilities.push(ability);
-
             if (ability === 'archer') {
                 player.arrowAmmo = 100;
             }
@@ -514,9 +488,7 @@ io.on('connection', (socket) => {
 
     socket.on('playerAction', (actionData) => {
         const player = gameState.players[socket.id];
-        if (!player) {
-            return;
-        }
+        if (!player) return;
         if (actionData.type === 'primary_action') {
             if (player.activeAbility === 'archer' && player.arrowAmmo > 0) {
                 player.arrowAmmo--;
@@ -534,9 +506,7 @@ io.on('connection', (socket) => {
                 player.isCamouflaged = true;
                 player.camouflageAvailable = false;
                 setTimeout(() => {
-                    if (gameState.players[socket.id]) {
-                        player.camouflageAvailable = true;
-                    }
+                    if (gameState.players[socket.id]) player.camouflageAvailable = true;
                 }, CAMOUFLAGE_COOLDOWN);
             }
             if (player.activeAbility === 'athlete' && player.sprintAvailable) {
@@ -551,9 +521,7 @@ io.on('connection', (socket) => {
                     }
                 }, SPRINT_DURATION);
                 setTimeout(() => {
-                    if (gameState.players[socket.id]) {
-                        player.sprintAvailable = true;
-                    }
+                    if (gameState.players[socket.id]) player.sprintAvailable = true;
                 }, SPRINT_COOLDOWN);
             }
             if (player.activeAbility === 'ant' && player.antAvailable) {
@@ -574,9 +542,7 @@ io.on('connection', (socket) => {
                     }
                 }, ANT_TRANSFORMATION_DURATION);
                 setTimeout(() => {
-                    if (gameState.players[socket.id]) {
-                        player.antAvailable = true;
-                    }
+                    if (gameState.players[socket.id]) player.antAvailable = true;
                 }, ANT_COOLDOWN);
             }
         }
@@ -614,12 +580,14 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log('Jogador desconectado:', socket.id);
+        const player = gameState.players[socket.id];
+        if (player && player.activeAbility !== ' ') {
+            gameState.takenAbilities = gameState.takenAbilities.filter(ability => ability !== player.activeAbility);
+        }
         delete gameState.players[socket.id];
     });
 });
 
-
-// --- GAME LOOPS DO SERVIDOR ---
 setInterval(() => {
     if (!gameState || !gameState.players) {
         return;
@@ -628,7 +596,6 @@ setInterval(() => {
     io.emit('gameStateUpdate', gameState);
 }, TICK_RATE);
 
-// --- MODIFICADO: Lógica do temporizador do jogo ---
 setInterval(() => {
     if (gameState && gameState.players && Object.keys(gameState.players).length > 0) {
         if (gameState.gamePhase === 'waiting') {
@@ -638,9 +605,21 @@ setInterval(() => {
                 gameState.gamePhase = 'running';
             }
         } else if (gameState.gamePhase === 'running') {
+            if (gameState.timeLeft === ROUND_DURATION) {
+                const playerIds = Object.keys(gameState.players);
+                if (playerIds.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * playerIds.length);
+                    const zombieId = playerIds[randomIndex];
+                    const zombiePlayer = gameState.players[zombieId];
+                    zombiePlayer.role = 'zombie';
+                    zombiePlayer.speed *= ZOMBIE_SPEED_BOOST;
+                    console.log(`A rodada começou! ${zombiePlayer.name} é o Zumbi inicial!`);
+                    io.emit('newMessage', { name: 'Servidor', text: `A infecção começou! ${zombiePlayer.name} é o zumbi!` });
+                }
+            }
             if (gameState.timeLeft > 0) {
                 gameState.timeLeft--;
-                 for (const id in gameState.players) {
+                for (const id in gameState.players) {
                     const player = gameState.players[id];
                     player.coins += 1;
                     if (!player.isAnt) {
@@ -654,29 +633,36 @@ setInterval(() => {
                     }
                 }
             } else {
-                // O TEMPO ACABOU! INICIA O MODO ZUMBI.
-                gameState.gamePhase = 'zombie';
-                console.log("A fase de infecção começou!");
-
-                const playerIds = Object.keys(gameState.players);
-                if (playerIds.length > 0) {
-                    // Escolhe um zumbi aleatoriamente
-                    const randomIndex = Math.floor(Math.random() * playerIds.length);
-                    const zombieId = playerIds[randomIndex];
-                    const zombiePlayer = gameState.players[zombieId];
-
-                    // Transforma o jogador em zumbi
-                    zombiePlayer.role = 'zombie';
-                    zombiePlayer.speed *= ZOMBIE_SPEED_BOOST; // Dá um bônus de velocidade inicial
-
-                    console.log(`O jogador ${zombiePlayer.name} é o Zumbi inicial!`);
+                console.log("O tempo acabou! Humanos venceram a rodada.");
+                io.emit('newMessage', { name: 'Servidor', text: 'O tempo acabou! Os Humanos sobreviveram!' });
+                const currentPlayers = gameState.players;
+                initializeGame();
+                gameState.players = currentPlayers;
+                for (const id in gameState.players) {
+                    const player = gameState.players[id];
+                    player.x = WORLD_WIDTH / 2 + 500;
+                    player.y = WORLD_HEIGHT / 2;
+                    player.role = 'human';
+                    player.activeAbility = ' ';
+                    player.isCamouflaged = false;
+                    player.camouflageAvailable = true;
+                    player.isSprinting = false;
+                    player.sprintAvailable = true;
+                    player.isAnt = false;
+                    player.antAvailable = true;
+                    player.isHidden = false;
+                    player.arrowAmmo = 0;
+                    player.engineerAbilityUsed = false;
+                    player.isInDuct = false;
+                    player.width = INITIAL_PLAYER_SIZE;
+                    player.height = INITIAL_PLAYER_SIZE * 1.25;
+                    player.speed = INITIAL_PLAYER_SPEED;
                 }
             }
         }
     }
 }, 1000);
 
-// --- INICIA O SERVIDOR ---
 server.listen(PORT, () => {
     initializeGame();
     console.log(`🚀 Servidor do jogo rodando em http://localhost:${PORT}`);

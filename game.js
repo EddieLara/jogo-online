@@ -5,7 +5,7 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-const socket = io('https://jogo-online-medv.onrender.com');
+const socket = io();
 
 // --- ASSETS E CONSTANTES ---
 function loadImage(src) {
@@ -15,7 +15,7 @@ function loadImage(src) {
 }
 
 const human = loadImage('Sprites/Human.png');
-const zombie = loadImage('Sprites/Zombie.png'); // <-- ADICIONADO: Carrega a imagem do zumbi
+const zombie = loadImage('Sprites/Zombie.png');
 const box = loadImage('Sprites/Box.png');
 const grass = loadImage('Sprites/Grass.png');
 const street = loadImage('Sprites/Street.png');
@@ -63,7 +63,6 @@ socket.on('newMessage', (message) => {
 });
 
 // --- INPUT HANDLERS ---
-// ... (Toda a seção de Input Handlers permanece a mesma)
 window.addEventListener('keydown', function (event) {
     const key = event.key.toLowerCase();
     if (key === 'enter') {
@@ -156,7 +155,6 @@ canvas.addEventListener('mousedown', function (event) {
     }
 });
 
-
 // --- FUNÇÃO DE DESENHO ---
 function draw() {
     if (!myId || !gameState.players || !gameState.players[myId]) {
@@ -175,8 +173,6 @@ function draw() {
     ctx.save();
     ctx.translate(-cameraX, -cameraY);
 
-    // DESENHA MUNDO
-    // ... (Toda a seção de desenhar o mundo permanece a mesma)
     ctx.drawImage(grass, 0, 0, 3100, 2000);
     ctx.drawImage(floors, 200, 200, 2697, 1670);
     ctx.drawImage(garageFloor, 2000, 1200, 700, 600);
@@ -229,7 +225,6 @@ function draw() {
         ctx.strokeRect(wall.x, wall.y, wall.width, wall.height);
     }
 
-    // --- MODIFICADO: Lógica para desenhar jogadores ---
     for (const playerId in gameState.players) {
         const player = gameState.players[playerId];
         if (player.isInDuct) continue;
@@ -241,8 +236,6 @@ function draw() {
         } else {
             ctx.rotate(player.rotation);
         }
-        
-        // Decide qual sprite desenhar
         if (player.role === 'zombie') {
             ctx.drawImage(zombie, -player.width / 2, -player.height / 2, player.width, player.height);
         } else if (player.isCamouflaged) {
@@ -250,14 +243,10 @@ function draw() {
         } else if (player.isAnt) {
             ctx.drawImage(ant, -player.width / 2, -player.height / 2, player.width, player.height);
         } else {
-            // Se não for zumbi, camuflado ou formiga, é humano
             ctx.drawImage(human, -player.width / 2, -player.height / 2, player.width, player.height);
         }
         ctx.restore();
-
-        // Desenha o nome do jogador
         if (!player.isAnt && !player.isCamouflaged && !player.isHidden) {
-            // Muda a cor do nome se for zumbi
             ctx.fillStyle = player.role === 'zombie' ? '#2ecc71' : 'white';
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 5;
@@ -268,7 +257,6 @@ function draw() {
         }
     }
 
-    // ... (Desenho do resto dos objetos)
     ctx.drawImage(sunshade, 4200, 1000, 320, 340);
     ctx.drawImage(sunshadeII, 4350, 600, 320, 340);
     ctx.drawImage(sunshadeIII, 4440, 1400, 320, 340);
@@ -278,93 +266,85 @@ function draw() {
     }
     ctx.restore();
 
-    // --- MODIFICADO: Desenho da Interface (HUD) ---
     ctx.font = '40px Arial';
     ctx.fillStyle = 'white';
     ctx.textAlign = 'center';
-
     if (gameState.gamePhase === 'waiting') {
         const seconds = gameState.startTime % 60;
         ctx.fillText(`0:${String(seconds).padStart(2, '0')}`, canvas.width / 2, 80);
         ctx.font = '30px Arial';
-        ctx.fillText('Start of the round in...', canvas.width / 2, 40);
-    } else if (gameState.gamePhase === 'running') {
+        ctx.fillText('A rodada começa em...', canvas.width / 2, 40);
+    } else {
         const minutes = Math.floor(gameState.timeLeft / 60);
         const seconds = gameState.timeLeft % 60;
         ctx.fillText(`${minutes}:${String(seconds).padStart(2, '0')}`, canvas.width / 2, 50);
-    } else if (gameState.gamePhase === 'zombie') {
-        // Mostra uma mensagem na fase zumbi
-        ctx.font = '50px Arial';
-        ctx.fillStyle = 'red';
-        ctx.textAlign = 'center';
-        ctx.fillText('INFECTION!', canvas.width / 2, 80);
-        ctx.font = '30px Arial';
-        ctx.fillStyle = me.role === 'zombie' ? '#2ecc71' : 'white';
-        ctx.fillText(me.role === 'zombie' ? 'INFECT THE HUMANS!' : 'SURVIVE!', canvas.width / 2, 120);
+        if (me.role === 'zombie') {
+            ctx.font = '30px Arial';
+            ctx.fillStyle = '#2ecc71';
+            ctx.fillText('INFECTE OS HUMANOS!', canvas.width / 2, 90);
+        } else {
+            ctx.font = '30px Arial';
+            ctx.fillStyle = 'cyan';
+            ctx.fillText('SOBREVIVA!', canvas.width / 2, 90);
+        }
     }
 
-    // Contador de moedas
-    // ... (O resto da HUD permanece o mesmo)
     ctx.font = '30px Arial';
     ctx.fillStyle = 'gold';
     ctx.textAlign = 'right';
     ctx.fillText(`🪙 ${me.coins}`, canvas.width - 20, 50);
-    ctx.font = '30px Arial';
     ctx.textAlign = 'right';
     ctx.fillStyle = 'white';
-    ctx.fillText(`SPEED: ${me.speed.toFixed(2)}`, canvas.width - 20, canvas.height - 10);
+    ctx.fillText(`VELOCIDADE: ${me.speed.toFixed(2)}`, canvas.width - 20, canvas.height - 10);
     ctx.textAlign = 'left';
-    ctx.fillText(`SKILL: ${me.activeAbility.toUpperCase()}`, 10, canvas.height - 10);
+    ctx.fillText(`HABILIDADE: ${me.activeAbility.toUpperCase()}`, 10, canvas.height - 10);
     if (me.activeAbility === 'archer') {
-        ctx.fillText(`AMMO: ${me.arrowAmmo}`, 10, canvas.height - 50);
+        ctx.fillText(`MUNIÇÃO: ${me.arrowAmmo}`, 10, canvas.height - 50);
     }
     if (me.activeAbility === 'engineer') {
         ctx.font = '24px Arial';
-        const statusText = me.engineerAbilityUsed ? 'USED' : 'AVAILABLE';
+        const statusText = me.engineerAbilityUsed ? 'USADO' : 'DISPONÍVEL';
         ctx.fillStyle = me.engineerAbilityUsed ? 'red' : 'lightgreen';
-        ctx.fillText(`VENTS: ${statusText}`, 10, canvas.height - 50);
+        ctx.fillText(`DUTOS: ${statusText}`, 10, canvas.height - 50);
     }
     if (me.activeAbility === 'athlete') {
         ctx.font = '24px Arial';
         ctx.fillStyle = me.sprintAvailable ? 'lightgreen' : 'red';
-        ctx.fillText(`SPRINT: ${me.sprintAvailable ? 'READY' : 'RELOADING'}`, 10, canvas.height - 50);
+        ctx.fillText(`SPRINT: ${me.sprintAvailable ? 'PRONTO' : 'RECARREGANDO'}`, 10, canvas.height - 50);
     }
     if (me.activeAbility === 'chameleon') {
         ctx.font = '24px Arial';
         ctx.fillStyle = me.camouflageAvailable ? 'lightgreen' : 'red';
-        ctx.fillText(`CAMOUFLAGE: ${me.camouflageAvailable ? 'READY' : 'RELOADING'}`, 10, canvas.height - 50);
+        ctx.fillText(`CAMUFLAGEM: ${me.camouflageAvailable ? 'PRONTO' : 'RECARREGANDO'}`, 10, canvas.height - 50);
     }
     if (me.activeAbility === 'ant') {
         ctx.font = '24px Arial';
         let statusText;
         if (me.isAnt) {
-            statusText = 'ACTIVE';
+            statusText = 'ATIVO';
             ctx.fillStyle = 'yellow';
         } else if (me.antAvailable) {
-            statusText = 'READY';
+            statusText = 'PRONTO';
             ctx.fillStyle = 'lightgreen';
         } else {
-            statusText = 'RELOADING';
+            statusText = 'RECARREGANDO';
             ctx.fillStyle = 'red';
         }
-        ctx.fillText(`ANT: ${statusText}`, 10, canvas.height - 50);
+        ctx.fillText(`FORMIGA: ${statusText}`, 10, canvas.height - 50);
     }
 
     drawChat();
-
     if (isMenuOpen) {
         drawMenu();
     }
 }
 
-// --- FUNÇÕES AUXILIARES E GAME LOOP ---
-// ... (O resto do arquivo: drawChat, drawMenu, e todas as funções auxiliares e o gameLoop permanecem iguais)
 function drawChat() {
     if (chatMessages.length === 0) return;
     ctx.save();
-    const chatBoxX = canvas.width / 2 - 400;
-    const chatBoxY = canvas.height - 50 - (chatMessages.length * 25);
-    const chatBoxWidth = 800;
+    const chatBoxX = 10;
+    const chatBoxY = canvas.height - 200 - (chatMessages.length * 25);
+    const chatBoxWidth = 500;
     const chatBoxHeight = (chatMessages.length * 25) + 10;
     ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
     ctx.fillRect(chatBoxX, chatBoxY, chatBoxWidth, chatBoxHeight);
@@ -373,7 +353,7 @@ function drawChat() {
     ctx.textBaseline = 'top';
     chatMessages.forEach((msg, index) => {
         const fullMessage = `${msg.name}: ${msg.text}`;
-        ctx.fillStyle = 'gold';
+        ctx.fillStyle = msg.name === 'Servidor' ? 'yellow' : 'gold';
         ctx.fillText(msg.name + ':', chatBoxX + 10, chatBoxY + 5 + (index * 25));
         ctx.fillStyle = 'white';
         const nameWidth = ctx.measureText(msg.name + ': ').width;
@@ -381,11 +361,10 @@ function drawChat() {
     });
     ctx.restore();
 }
+
 function drawMenu() {
     const me = gameState.players[myId];
-    if (!me) {
-        return;
-    }
+    if (!me) return;
     const menuWidth = 1500, menuHeight = 900;
     const menuX = (canvas.width - menuWidth) / 2, menuY = (canvas.height - menuHeight) / 2;
     ctx.fillStyle = '#4d4c4cff';
@@ -395,30 +374,25 @@ function drawMenu() {
     ctx.strokeRect(menuX, menuY, menuWidth, menuHeight);
     const functionsTabBtn = getFunctionsTabRect();
     const itemsTabBtn = getItemsTabRect();
-    ctx.fillStyle = '#444';
+    ctx.fillStyle = activeMenuTab === 'functions' ? '#000000ff' : '#444';
     ctx.fillRect(functionsTabBtn.x, functionsTabBtn.y, functionsTabBtn.width, functionsTabBtn.height);
+    ctx.fillStyle = activeMenuTab === 'items' ? '#000000ff' : '#444';
     ctx.fillRect(itemsTabBtn.x, itemsTabBtn.y, itemsTabBtn.width, itemsTabBtn.height);
-    ctx.fillStyle = '#000000ff';
-    if (activeMenuTab === 'functions') {
-        ctx.fillRect(functionsTabBtn.x, functionsTabBtn.y, functionsTabBtn.width, functionsTabBtn.height);
-    } else {
-        ctx.fillRect(itemsTabBtn.x, itemsTabBtn.y, itemsTabBtn.width, itemsTabBtn.height);
-    }
     ctx.fillStyle = 'white';
     ctx.font = '30px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('SKILLS', functionsTabBtn.x + functionsTabBtn.width / 2, functionsTabBtn.y + 40);
-    ctx.fillText('ITEMS', itemsTabBtn.x + itemsTabBtn.width / 2, itemsTabBtn.y + 40);
+    ctx.fillText('HABILIDADES', functionsTabBtn.x + functionsTabBtn.width / 2, functionsTabBtn.y + 40);
+    ctx.fillText('ITENS', itemsTabBtn.x + itemsTabBtn.width / 2, itemsTabBtn.y + 40);
     if (activeMenuTab === 'functions') {
         ctx.font = '50px Arial';
-        ctx.fillText('CHOOSE A SKILL', canvas.width / 2, menuY + 140);
+        ctx.fillText('ESCOLHA UMA HABILIDADE', canvas.width / 2, menuY + 140);
         if (me.activeAbility === ' ') {
             const buttons = [
-                { text: 'CHAMELEON', ability: 'chameleon', rect: getChameleonButtonRect() },
-                { text: 'ATHLETE', ability: 'athlete', rect: getAthleteButtonRect() },
-                { text: 'ARCHER', ability: 'archer', rect: getArcherButtonRect() },
-                { text: 'ENGINEER', ability: 'engineer', rect: getEngineerButtonRect() },
-                { text: 'ANT', ability: 'ant', rect: getAntButtonRect() }
+                { text: 'CAMALEÃO', ability: 'chameleon', rect: getChameleonButtonRect() },
+                { text: 'ATLETA', ability: 'athlete', rect: getAthleteButtonRect() },
+                { text: 'ARQUEIRO', ability: 'archer', rect: getArcherButtonRect() },
+                { text: 'ENGENHEIRO', ability: 'engineer', rect: getEngineerButtonRect() },
+                { text: 'FORMIGA', ability: 'ant', rect: getAntButtonRect() }
             ];
             buttons.forEach(btn => {
                 const isTaken = gameState.takenAbilities.includes(btn.ability);
@@ -430,7 +404,7 @@ function drawMenu() {
                 ctx.strokeRect(btn.rect.x - 10, btn.rect.y - 10, btn.rect.width + 10, btn.rect.height + 10);
                 ctx.font = '40px Arial';
                 ctx.textAlign = 'center';
-                const buttonText = isTaken ? `${btn.text}` : btn.text;
+                const buttonText = isTaken ? `${btn.text} (INDISPONÍVEL)` : btn.text;
                 ctx.fillText(buttonText, btn.rect.x + btn.rect.width / 2, btn.rect.y + 35);
                 ctx.font = '30px Arial';
                 ctx.textAlign = 'left';
@@ -440,27 +414,26 @@ function drawMenu() {
         } else {
             ctx.font = '40px Arial';
             ctx.fillStyle = 'grey';
-            ctx.fillText('SKILL ALREADY CHOSEN!', canvas.width / 2, canvas.height / 2);
+            ctx.fillText('HABILIDADE JÁ ESCOLHIDA!', canvas.width / 2, canvas.height / 2);
         }
     } else if (activeMenuTab === 'items') {
         ctx.font = '50px Arial';
-        ctx.fillText('SHOP', canvas.width / 2, menuY + 140);
+        ctx.fillText('LOJA', canvas.width / 2, menuY + 140);
         ctx.font = '30px Arial';
         ctx.fillStyle = 'grey';
-        ctx.fillText(me.inventory.length === 0 ? ' ' : me.inventory.join(', '), canvas.width / 2, canvas.height / 2);
+        ctx.fillText(me.inventory.length === 0 ? 'Inventário vazio' : me.inventory.join(', '), canvas.width / 2, canvas.height / 2);
     }
     ctx.font = '14px Arial';
     ctx.fillStyle = 'white';
     ctx.textAlign = 'center';
-    ctx.fillText('PRESS "B" TO CLOSE', canvas.width / 2, menuY + menuHeight - 20);
+    ctx.fillText('PRESSIONE "B" PARA FECHAR', canvas.width / 2, menuY + menuHeight - 20);
 }
+
 function isClickInside(pos, rect) {
     return pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height;
 }
 function getPlayerAngle(player) {
-    if (!player) {
-        return 0;
-    }
+    if (!player) return 0;
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
     const dx = mouse.x - cx;
