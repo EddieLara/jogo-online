@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <title>Infestation.io</title>
     <style>
-
         body {
             background-color: #000000;
             display: flex;
@@ -12,16 +11,39 @@
             align-items: center;
             height: 100vh;
             margin: 0;
+            overflow: hidden; /* Adicionado para evitar barras de rolagem */
         }
 
         canvas {
             background-color: #000000;
             border: 2px solid rgb(0, 0, 0);
         }
+        
+        /* Estilo para o campo de chat (agora separado) */
+        #chatInput {
+            display: none; /* Começa invisível */
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%); /* Centraliza horizontalmente */
+            width: 50%;
+            max-width: 800px;
+            padding: 10px;
+            font-size: 16px;
+            border: 2px solid #555;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border-radius: 8px;
+            outline: none; /* Remove a borda de foco padrão */
+            z-index: 10; /* Garante que fique sobre o canvas */
+        }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas" width="2300" height="1090"></canvas>
+    
+    <input type="text" id="chatInput" placeholder="Pressione Enter para conversar..." autocomplete="off">
+    
     <script src="/socket.io/socket.io.js"></script>
     <script src="game.js"></script>
 </body>

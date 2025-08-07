@@ -581,6 +581,19 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('sendMessage', (text) => {
+        const player = gameState.players[socket.id];
+        // Verifica se o jogador existe e se a mensagem não está vazia
+        if (player && text && text.trim().length > 0) {
+            const message = {
+                name: player.name,
+                text: text.substring(0, 150) // Limita o tamanho da mensagem para segurança
+            };
+            // Envia a mensagem para TODOS os clientes conectados
+            io.emit('newMessage', message);
+        }
+    });
+
     socket.on('disconnect', () => {
         console.log('Jogador desconectado:', socket.id);
         delete gameState.players[socket.id];
