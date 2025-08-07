@@ -441,6 +441,8 @@ function updateGameState() {
                     player.y = WORLD_HEIGHT / 2;
                     player.role = 'human';
                     player.activeAbility = ' ';
+                    player.width = INITIAL_PLAYER_SIZE;
+                    player.height = INITIAL_PLAYER_SIZE * 1.25;
                 }
             }
         }
@@ -653,7 +655,6 @@ setInterval(() => {
                     player.isInDuct = false;
                     player.width = INITIAL_PLAYER_SIZE;
                     player.height = INITIAL_PLAYER_SIZE * 1.25;
-                    player.speed = INITIAL_PLAYER_SPEED;
                 }
             }
         }
