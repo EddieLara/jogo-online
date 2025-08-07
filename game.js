@@ -1,5 +1,5 @@
 // =============================================================
-//                           SCRIPT DO CLIENTE
+//                           SCRIPT DO CLIENTE
 // =============================================================
 
 const canvas = document.getElementById('gameCanvas');
@@ -36,7 +36,7 @@ const car = loadImage('Sprites/Car.png');
 
 // --- ESTADO LOCAL DO CLIENTE ---
 let myId = null;
-let gameState = { players: {}, arrows: [], timeLeft: 120, startTime: 60, gamePhase: 'waiting' };
+let gameState = { players: {}, arrows: [], timeLeft: 120, startTime: 60, gamePhase: 'waiting', abilityCosts: {} };
 const movement = { up: false, down: false, left: false, right: false };
 let mouse = { x: 0, y: 0 };
 let isMenuOpen = false;
@@ -102,7 +102,7 @@ window.addEventListener('keydown', function(event) {
     if (isMenuOpen || isChatting) {
         return;
     }
-    
+
     // Controles do jogo (só funcionam se não estiver digitando no chat)
     switch (key) {
         case 'w': case 'arrowup': movement.up = true; break;
@@ -239,7 +239,7 @@ function draw() {
     for (const wall of gameState.garage.walls) {
         ctx.strokeRect(wall.x, wall.y, wall.width, wall.height);
     }
-    
+
     // DESENHA JOGADORES
     for (const playerId in gameState.players) {
         const player = gameState.players[playerId];
@@ -275,7 +275,7 @@ function draw() {
     ctx.drawImage(sunshade, 4200, 1000, 320, 340);
     ctx.drawImage(sunshadeII, 4350, 600, 320, 340);
     ctx.drawImage(sunshadeIII, 4440, 1400, 320, 340);
-    
+
     for (const arrow of gameState.arrows) {
         ctx.fillStyle = arrow.color || 'red';
         ctx.fillRect(arrow.x, arrow.y, arrow.width, arrow.height);
@@ -296,7 +296,7 @@ function draw() {
         const seconds = gameState.timeLeft % 60;
         ctx.fillText(`${minutes}:${String(seconds).padStart(2, '0')}`, canvas.width / 2, 50);
     }
-    
+
     // Contador de moedas
     ctx.font = '30px Arial';
     ctx.fillStyle = 'gold';
@@ -363,7 +363,7 @@ function drawChat() {
     // Fundo semitransparente para legibilidade
     ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
     ctx.fillRect(chatBoxX, chatBoxY, chatBoxWidth, chatBoxHeight);
-    
+
     ctx.font = '18px Arial';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
@@ -371,9 +371,9 @@ function drawChat() {
     chatMessages.forEach((msg, index) => {
         // Formato: "NomeDoJogador: mensagem"
         const fullMessage = `${msg.name}: ${msg.text}`;
-        
+
         // Cor do nome do jogador (pode personalizar)
-        ctx.fillStyle = 'gold'; 
+        ctx.fillStyle = 'gold';
         ctx.fillText(msg.name + ':', chatBoxX + 10, chatBoxY + 5 + (index * 25));
 
         // Cor do texto da mensagem
@@ -386,6 +386,9 @@ function drawChat() {
 }
 
 // --- FUNÇÕES AUXILIARES ---
+// =============================================================
+//               FUNÇÃO drawMenu() ATUALIZADA
+// =============================================================
 function drawMenu() {
     const me = gameState.players[myId];
     if (!me) {
@@ -425,15 +428,42 @@ function drawMenu() {
                 { text: 'ENGINEER', ability: 'engineer', rect: getEngineerButtonRect() },
                 { text: 'ANT', ability: 'ant', rect: getAntButtonRect() }
             ];
-            ctx.font = '40px Arial';
-            ctx.fillStyle = 'white';
+
             buttons.forEach(btn => {
                 const isTaken = gameState.takenAbilities.includes(btn.ability);
-                ctx.fillStyle = isTaken ? '#888' : 'white';
+                const cost = gameState.abilityCosts[btn.ability] || 0; // Pega o custo
+                const canAfford = me.coins >= cost;
+
+                // Desenha o contorno e o texto do botão
+                ctx.fillStyle = isTaken ? '#888' : (canAfford ? 'white' : 'red');
+                ctx.strokeStyle = isTaken ? '#555' : (canAfford ? 'white' : 'darkred');
+                ctx.lineWidth = 3;
                 ctx.strokeRect(btn.rect.x - 10, btn.rect.y - 10, btn.rect.width + 10, btn.rect.height + 10);
+
+                ctx.font = '40px Arial';
+                ctx.textAlign = 'center';
                 const buttonText = isTaken ? `${btn.text} (TAKEN)` : btn.text;
-                ctx.fillText(btn.text, btn.rect.x + btn.rect.width / 2, btn.rect.y + 35);
+                ctx.fillText(buttonText, btn.rect.x + btn.rect.width / 2, btn.rect.y + 35);
+
+                // Desenha o custo ao lado do botão
+                ctx.font = '30px Arial';
+                ctx.textAlign = 'left';
+                ctx.fillStyle = canAfford ? 'gold' : 'red';
+                ctx.fillText(`🪙 ${cost}`, btn.rect.x + btn.rect.width + 30, btn.rect.y + 35);
+
+
+                // Lógica de HOVER (passar o mouse por cima)
+                if (isClickInside(mouse, btn.rect) && !isTaken) {
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    ctx.fillRect(mouse.x + 15, mouse.y + 15, 200, 50);
+
+                    ctx.fillStyle = 'gold';
+                    ctx.font = '24px Arial';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(`Custo: ${cost}`, mouse.x + 25, mouse.y + 45);
+                }
             });
+
         } else {
             ctx.font = '40px Arial';
             ctx.fillStyle = 'grey';
@@ -448,8 +478,10 @@ function drawMenu() {
     }
     ctx.font = '14px Arial';
     ctx.fillStyle = 'white';
+    ctx.textAlign = 'center';
     ctx.fillText('PRESS "B" TO CLOSE', canvas.width / 2, menuY + menuHeight - 20);
 }
+
 function isClickInside(pos, rect) {
     return pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height;
 }

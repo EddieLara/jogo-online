@@ -1,5 +1,5 @@
 // =============================================================
-//                           SCRIPT DO SERVIDOR
+//                           SCRIPT DO SERVIDOR
 // =============================================================
 
 const express = require('express');
@@ -52,6 +52,7 @@ function initializeGame() {
         players: {},
         arrows: [],
         takenAbilities: [],
+        abilityCosts: ABILITY_COSTS, // <-- ADICIONADO: Envia os custos para o cliente
         gamePhase: 'waiting',
         startTime: 60,
         timeLeft: 120,
@@ -161,7 +162,7 @@ function createNewPlayer(socket) {
     };
 }
 
-function getVertices(rect) {  // PAREI DE REVISAR O CÓDIGO AQUI!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+function getVertices(rect) { 
     const vertices = [];
     const cx = rect.x + rect.width / 2;
     const cy = rect.y + rect.height / 2;
@@ -432,7 +433,7 @@ function updateGameState() {
             }
         }
         // =========================================================================
-        //            FIM DA LÓGICA DE COLISÃO JOGADOR-MÓVEL CORRIGIDA
+        //           FIM DA LÓGICA DE COLISÃO JOGADOR-MÓVEL CORRIGIDA
         // =========================================================================
 
         // Resolução final de colisão jogador-parede para evitar bugs de atravessar
