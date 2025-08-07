@@ -386,9 +386,6 @@ function drawChat() {
 }
 
 // --- FUNÇÕES AUXILIARES ---
-// =============================================================
-//               FUNÇÃO drawMenu() ATUALIZADA
-// =============================================================
 function drawMenu() {
     const me = gameState.players[myId];
     if (!me) {
@@ -431,7 +428,7 @@ function drawMenu() {
 
             buttons.forEach(btn => {
                 const isTaken = gameState.takenAbilities.includes(btn.ability);
-                const cost = gameState.abilityCosts[btn.ability] || 0; // Pega o custo
+                const cost = gameState.abilityCosts[btn.ability] || 0;
                 const canAfford = me.coins >= cost;
 
                 // Desenha o contorno e o texto do botão
@@ -450,18 +447,8 @@ function drawMenu() {
                 ctx.textAlign = 'left';
                 ctx.fillStyle = canAfford ? 'gold' : 'red';
                 ctx.fillText(`🪙 ${cost}`, btn.rect.x + btn.rect.width + 30, btn.rect.y + 35);
-
-
-                // Lógica de HOVER (passar o mouse por cima)
-                if (isClickInside(mouse, btn.rect) && !isTaken) {
-                    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-                    ctx.fillRect(mouse.x + 15, mouse.y + 15, 200, 50);
-
-                    ctx.fillStyle = 'gold';
-                    ctx.font = '24px Arial';
-                    ctx.textAlign = 'left';
-                    ctx.fillText(`Custo: ${cost}`, mouse.x + 25, mouse.y + 45);
-                }
+                
+                // O BLOCO DE CÓDIGO DO TOOLTIP FOI REMOVIDO DAQUI
             });
 
         } else {
