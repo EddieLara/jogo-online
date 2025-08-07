@@ -1,5 +1,5 @@
 // =============================================================
-//                       SCRIPT DO SERVIDOR
+//                           SCRIPT DO SERVIDOR
 // =============================================================
 
 const express = require('express');
@@ -38,6 +38,10 @@ const ANGULAR_FRICTION = 0.95;
 const TORQUE_FACTOR = 0.000008;
 const ZOMBIE_SPEED_BOOST = 1.15;
 
+// --- NOVAS CONSTANTES PARA A HABILIDADE ESPIÃO ---
+const SPY_DURATION = 20000; // 20 segundos de duração
+const SPY_COOLDOWN = 45000; // 45 segundos de recarga
+
 const ROUND_DURATION = 120; // 2 minutos
 
 const ABILITY_COSTS = {
@@ -45,7 +49,8 @@ const ABILITY_COSTS = {
     athlete: 100,
     archer: 150,
     engineer: 200,
-    ant: 200
+    ant: 200,
+    spy: 180 // Custo da nova habilidade
 };
 
 let gameState = {};
@@ -152,6 +157,11 @@ function createNewPlayer(socket) {
         sprintAvailable: true,
         isAnt: false,
         antAvailable: true,
+        // --- NOVOS ATRIBUTOS PARA O ESPIÃO ---
+        isSpying: false,
+        spyUsesLeft: 2,
+        spyCooldown: false,
+        // --- FIM DOS NOVOS ATRIBUTOS ---
         isHidden: false,
         arrowAmmo: 0,
         engineerAbilityUsed: false,
@@ -414,7 +424,13 @@ function updateGameState() {
                 for (const id2 of playerIds) {
                     if (id1 === id2) continue;
                     const player2 = players[id2];
-                    if (player2.role === 'human' && isColliding(player1.hitbox, player2.hitbox)) {
+                    
+                    // --- LÓGICA DE INFECÇÃO ATUALIZADA ---
+                    // Um zumbi pode infectar um humano ou um espião disfarçado
+                    if ((player2.role === 'human' || player2.isSpying) && isColliding(player1.hitbox, player2.hitbox)) {
+                        if (player2.isSpying) {
+                            player2.isSpying = false; // Cancela o disfarce
+                        }
                         player2.role = 'zombie';
                         player2.speed *= ZOMBIE_SPEED_BOOST;
                         console.log(`${player2.name} foi infectado!`);
@@ -425,7 +441,8 @@ function updateGameState() {
         }
         if (hasZombies) {
             for (const id of playerIds) {
-                if (players[id].role === 'human') {
+                // Um espião não conta como humano para a condição de vitória
+                if (players[id].role === 'human' && !players[id].isSpying) {
                     humanCount++;
                 }
             }
@@ -544,6 +561,26 @@ io.on('connection', (socket) => {
                     if (gameState.players[socket.id]) player.antAvailable = true;
                 }, ANT_COOLDOWN);
             }
+            // --- LÓGICA DE ATIVAÇÃO DA HABILIDADE ESPIÃO ---
+            if (player.activeAbility === 'spy' && player.spyUsesLeft > 0 && !player.spyCooldown && !player.isSpying) {
+                player.isSpying = true;
+                player.spyUsesLeft--;
+                player.spyCooldown = true;
+
+                // Duração do disfarce (20 segundos)
+                setTimeout(() => {
+                    if (gameState.players[socket.id]) {
+                        player.isSpying = false;
+                    }
+                }, SPY_DURATION);
+                
+                // Cooldown para poder usar novamente (45 segundos)
+                setTimeout(() => {
+                    if (gameState.players[socket.id]) {
+                         player.spyCooldown = false;
+                    }
+                }, SPY_COOLDOWN);
+            }
         }
         if (actionData.type === 'interact') {
             if (player.activeAbility === 'engineer' && !player.engineerAbilityUsed && !player.isInDuct) {
@@ -649,6 +686,10 @@ setInterval(() => {
                     player.sprintAvailable = true;
                     player.isAnt = false;
                     player.antAvailable = true;
+                    // Reset do espião no final da rodada
+                    player.isSpying = false;
+                    player.spyUsesLeft = 2;
+                    player.spyCooldown = false;
                     player.isHidden = false;
                     player.arrowAmmo = 0;
                     player.engineerAbilityUsed = false;

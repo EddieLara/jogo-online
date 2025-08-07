@@ -1,5 +1,5 @@
 // =============================================================
-//                       SCRIPT DO CLIENTE
+//                           SCRIPT DO CLIENTE
 // =============================================================
 
 const canvas = document.getElementById('gameCanvas');
@@ -48,7 +48,7 @@ const ctx = canvas.getContext('2d');
 // --- FIM DO NOVO BLOCO DE CÓDIGO ---
 
 
-const socket = io('https://jogo-online-medv.onrender.com');
+const socket = io('https://insfestation-io-medv.onrender.com');
 
 // --- ASSETS E CONSTANTES ---
 function loadImage(src) {
@@ -178,6 +178,8 @@ canvas.addEventListener('mousedown', function (event) {
             const archerBtn = getArcherButtonRect();
             const engineerBtn = getEngineerButtonRect();
             const antBtn = getAntButtonRect();
+            const spyBtn = getSpyButtonRect(); // Novo botão Espião
+
             if (isClickInside(mouse, chameleonBtn) && !gameState.takenAbilities.includes('chameleon')) {
                 socket.emit('chooseAbility', 'chameleon');
             } else if (isClickInside(mouse, athleteBtn) && !gameState.takenAbilities.includes('athlete')) {
@@ -188,6 +190,8 @@ canvas.addEventListener('mousedown', function (event) {
                 socket.emit('chooseAbility', 'engineer');
             } else if (isClickInside(mouse, antBtn) && !gameState.takenAbilities.includes('ant')) {
                 socket.emit('chooseAbility', 'ant');
+            } else if (isClickInside(mouse, spyBtn) && !gameState.takenAbilities.includes('spy')) { // Nova condição
+                socket.emit('chooseAbility', 'spy');
             } else {
                 return;
             }
@@ -279,7 +283,9 @@ function draw() {
         } else {
             ctx.rotate(player.rotation);
         }
-        if (player.role === 'zombie') {
+
+        // Lógica de desenho atualizada
+        if (player.role === 'zombie' || player.isSpying) { // Se for zumbi OU espião
             ctx.drawImage(zombie, -player.width / 2, -player.height / 2, player.width, player.height);
         } else if (player.isCamouflaged) {
             ctx.drawImage(box, -player.width / 2, -player.height / 2, player.width, player.height);
@@ -289,7 +295,9 @@ function draw() {
             ctx.drawImage(human, -player.width / 2, -player.height / 2, player.width, player.height);
         }
         ctx.restore();
-        if (!player.isAnt && !player.isCamouflaged && !player.isHidden) {
+        
+        // Esconde o nome se estiver disfarçado
+        if (!player.isAnt && !player.isCamouflaged && !player.isHidden && !player.isSpying) {
             ctx.fillStyle = player.role === 'zombie' ? '#2ecc71' : 'white';
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 5;
@@ -341,6 +349,8 @@ function draw() {
     ctx.fillText(`VELOCIDADE: ${me.speed.toFixed(2)}`, canvas.width - 20, canvas.height - 10);
     ctx.textAlign = 'left';
     ctx.fillText(`HABILIDADE: ${me.activeAbility.toUpperCase()}`, 10, canvas.height - 10);
+    
+    // Status das Habilidades na UI
     if (me.activeAbility === 'archer') {
         ctx.fillText(`MUNIÇÃO: ${me.arrowAmmo}`, 10, canvas.height - 50);
     }
@@ -374,6 +384,29 @@ function draw() {
             ctx.fillStyle = 'red';
         }
         ctx.fillText(`FORMIGA: ${statusText}`, 10, canvas.height - 50);
+    }
+    // --- NOVO HUD PARA O ESPIÃO ---
+    if (me.activeAbility === 'spy') {
+        ctx.font = '24px Arial';
+        let statusText;
+        if (me.isSpying) {
+            statusText = 'ATIVO';
+            ctx.fillStyle = 'yellow';
+        } else if (me.spyUsesLeft > 0 && !me.spyCooldown) {
+            statusText = 'PRONTO';
+            ctx.fillStyle = 'lightgreen';
+        } else {
+            statusText = 'RECARREGANDO';
+            ctx.fillStyle = 'red';
+        }
+        if (me.spyUsesLeft === 0 && !me.isSpying) {
+             statusText = 'SEM USOS';
+             ctx.fillStyle = 'darkred';
+        }
+        ctx.fillText(`ESPIONAGEM: ${statusText}`, 10, canvas.height - 50);
+        ctx.font = '20px Arial';
+        ctx.fillStyle = 'white';
+        ctx.fillText(`USOS RESTANTES: ${me.spyUsesLeft}`, 10, canvas.height - 80);
     }
 
     drawChat();
@@ -435,7 +468,8 @@ function drawMenu() {
                 { text: 'ATLETA', ability: 'athlete', rect: getAthleteButtonRect() },
                 { text: 'ARQUEIRO', ability: 'archer', rect: getArcherButtonRect() },
                 { text: 'ENGENHEIRO', ability: 'engineer', rect: getEngineerButtonRect() },
-                { text: 'FORMIGA', ability: 'ant', rect: getAntButtonRect() }
+                { text: 'FORMIGA', ability: 'ant', rect: getAntButtonRect() },
+                { text: 'ESPIÃO', ability: 'spy', rect: getSpyButtonRect() } // Novo botão
             ];
             buttons.forEach(btn => {
                 const isTaken = gameState.takenAbilities.includes(btn.ability);
@@ -513,6 +547,12 @@ function getAntButtonRect() {
     const mY = (canvas.height - 400) / 2;
     return { x: canvas.width / 2 - 150, y: mY + 500, width: 300, height: 50 };
 }
+// Nova função para a posição do botão
+function getSpyButtonRect() {
+    const mY = (canvas.height - 400) / 2;
+    return { x: canvas.width / 2 - 150, y: mY + 575, width: 300, height: 50 };
+}
+
 
 // --- GAME LOOP ---
 function gameLoop() {
