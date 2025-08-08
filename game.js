@@ -1,22 +1,11 @@
-// =============================================================
-//                           SCRIPT DO CLIENTE
-// =============================================================
-
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-
-// --- NOVO BLOCO DE CÓDIGO PARA CONFIGURAÇÃO INICIAL ---
-// Este bloco garante que a página e o canvas sejam preparados ANTES de qualquer outra coisa.
 (function setup() {
     const chatInput = document.getElementById('chatInput');
     const body = document.body;
-
-    // 1. Estiliza o corpo da página via JavaScript
     body.style.backgroundColor = '#000000';
     body.style.margin = '0';
     body.style.overflow = 'hidden';
-
-    // 2. Estiliza o campo de chat via JavaScript
     chatInput.style.display = 'none';
     chatInput.style.position = 'absolute';
     chatInput.style.bottom = '20px';
@@ -32,31 +21,19 @@ const ctx = canvas.getContext('2d');
     chatInput.style.borderRadius = '8px';
     chatInput.style.outline = 'none';
     chatInput.style.zIndex = '10';
-
-    // 3. Função para redimensionar o canvas
     function resizeCanvas() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
     }
-
-    // Chama a função para definir o tamanho inicial
     resizeCanvas();
-
-    // Adiciona o ouvinte para redimensionar no futuro
     window.addEventListener('resize', resizeCanvas);
 })();
-// --- FIM DO NOVO BLOCO DE CÓDIGO ---
-
-
-const socket = io('https://jogo-online-medv.onrender.com');
-
-// --- ASSETS E CONSTANTES ---
+const socket = io();
 function loadImage(src) {
     const img = new Image();
     img.src = src;
     return img;
 }
-
 const human = loadImage('Sprites/Human.png');
 const zombie = loadImage('Sprites/Zombie.png');
 const box = loadImage('Sprites/Box.png');
@@ -72,14 +49,10 @@ const chest = loadImage('Sprites/Chest.png');
 const floors = loadImage('Sprites/Floor.png');
 const garageFloor = loadImage('Sprites/garageFloor.png');
 const ant = loadImage('Sprites/Ant.png');
-
-// --- MÓVEIS ---
 const smallBed = loadImage('Sprites/smallBed.png');
 const smallTable = loadImage('Sprites/smallTable.png');
 const bigTable = loadImage('Sprites/bigTable.png');
 const car = loadImage('Sprites/Car.png');
-
-// --- ESTADO LOCAL DO CLIENTE ---
 let myId = null;
 let gameState = { players: {}, arrows: [], timeLeft: 120, startTime: 60, gamePhase: 'waiting', abilityCosts: {} };
 const movement = { up: false, down: false, left: false, right: false };
@@ -90,8 +63,6 @@ const chatInput = document.getElementById('chatInput');
 let isChatting = false;
 let chatMessages = [];
 const MAX_MESSAGES = 7;
-
-// --- COMUNICAÇÃO COM O SERVIDOR ---
 socket.on('connect', () => {
     myId = socket.id;
 });
@@ -104,8 +75,6 @@ socket.on('newMessage', (message) => {
         chatMessages.shift();
     }
 });
-
-// --- INPUT HANDLERS ---
 window.addEventListener('keydown', function (event) {
     const key = event.key.toLowerCase();
     if (key === 'enter') {
@@ -178,8 +147,7 @@ canvas.addEventListener('mousedown', function (event) {
             const archerBtn = getArcherButtonRect();
             const engineerBtn = getEngineerButtonRect();
             const antBtn = getAntButtonRect();
-            const spyBtn = getSpyButtonRect(); // Novo botão Espião
-
+            const spyBtn = getSpyButtonRect();
             if (isClickInside(mouse, chameleonBtn) && !gameState.takenAbilities.includes('chameleon')) {
                 socket.emit('chooseAbility', 'chameleon');
             } else if (isClickInside(mouse, athleteBtn) && !gameState.takenAbilities.includes('athlete')) {
@@ -190,7 +158,7 @@ canvas.addEventListener('mousedown', function (event) {
                 socket.emit('chooseAbility', 'engineer');
             } else if (isClickInside(mouse, antBtn) && !gameState.takenAbilities.includes('ant')) {
                 socket.emit('chooseAbility', 'ant');
-            } else if (isClickInside(mouse, spyBtn) && !gameState.takenAbilities.includes('spy')) { // Nova condição
+            } else if (isClickInside(mouse, spyBtn) && !gameState.takenAbilities.includes('spy')) {
                 socket.emit('chooseAbility', 'spy');
             } else {
                 return;
@@ -201,8 +169,6 @@ canvas.addEventListener('mousedown', function (event) {
         socket.emit('playerAction', { type: 'primary_action' });
     }
 });
-
-// --- FUNÇÃO DE DESENHO ---
 function draw() {
     if (!myId || !gameState.players || !gameState.players[myId]) {
         ctx.fillStyle = 'black';
@@ -219,7 +185,6 @@ function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     ctx.translate(-cameraX, -cameraY);
-
     ctx.drawImage(grass, 0, 0, 3100, 2000);
     ctx.drawImage(floors, 200, 200, 2697, 1670);
     ctx.drawImage(garageFloor, 2000, 1200, 700, 600);
@@ -271,7 +236,6 @@ function draw() {
     for (const wall of gameState.garage.walls) {
         ctx.strokeRect(wall.x, wall.y, wall.width, wall.height);
     }
-
     for (const playerId in gameState.players) {
         const player = gameState.players[playerId];
         if (player.isInDuct) continue;
@@ -283,9 +247,7 @@ function draw() {
         } else {
             ctx.rotate(player.rotation);
         }
-
-        // Lógica de desenho atualizada
-        if (player.role === 'zombie' || player.isSpying) { // Se for zumbi OU espião
+        if (player.role === 'zombie' || player.isSpying) {
             ctx.drawImage(zombie, -player.width / 2, -player.height / 2, player.width, player.height);
         } else if (player.isCamouflaged) {
             ctx.drawImage(box, -player.width / 2, -player.height / 2, player.width, player.height);
@@ -295,8 +257,6 @@ function draw() {
             ctx.drawImage(human, -player.width / 2, -player.height / 2, player.width, player.height);
         }
         ctx.restore();
-        
-        // Esconde o nome se estiver disfarçado
         if (!player.isAnt && !player.isCamouflaged && !player.isHidden && !player.isSpying) {
             ctx.fillStyle = player.role === 'zombie' ? '#2ecc71' : 'white';
             ctx.strokeStyle = 'black';
@@ -307,7 +267,6 @@ function draw() {
             ctx.fillText(player.name, player.x + player.width / 2, player.y - 20);
         }
     }
-
     ctx.drawImage(sunshade, 4200, 1000, 320, 340);
     ctx.drawImage(sunshadeII, 4350, 600, 320, 340);
     ctx.drawImage(sunshadeIII, 4440, 1400, 320, 340);
@@ -316,7 +275,6 @@ function draw() {
         ctx.fillRect(arrow.x, arrow.y, arrow.width, arrow.height);
     }
     ctx.restore();
-
     ctx.font = '40px Arial';
     ctx.fillStyle = 'white';
     ctx.textAlign = 'center';
@@ -339,7 +297,6 @@ function draw() {
             ctx.fillText('SOBREVIVA!', canvas.width / 2, 90);
         }
     }
-
     ctx.font = '30px Arial';
     ctx.fillStyle = 'gold';
     ctx.textAlign = 'right';
@@ -349,8 +306,6 @@ function draw() {
     ctx.fillText(`VELOCIDADE: ${me.speed.toFixed(2)}`, canvas.width - 20, canvas.height - 10);
     ctx.textAlign = 'left';
     ctx.fillText(`HABILIDADE: ${me.activeAbility.toUpperCase()}`, 10, canvas.height - 10);
-    
-    // Status das Habilidades na UI
     if (me.activeAbility === 'archer') {
         ctx.fillText(`MUNIÇÃO: ${me.arrowAmmo}`, 10, canvas.height - 50);
     }
@@ -385,7 +340,6 @@ function draw() {
         }
         ctx.fillText(`FORMIGA: ${statusText}`, 10, canvas.height - 50);
     }
-    // --- NOVO HUD PARA O ESPIÃO ---
     if (me.activeAbility === 'spy') {
         ctx.font = '24px Arial';
         let statusText;
@@ -400,21 +354,19 @@ function draw() {
             ctx.fillStyle = 'red';
         }
         if (me.spyUsesLeft === 0 && !me.isSpying) {
-             statusText = 'SEM USOS';
-             ctx.fillStyle = 'darkred';
+            statusText = 'SEM USOS';
+            ctx.fillStyle = 'darkred';
         }
         ctx.fillText(`ESPIONAGEM: ${statusText}`, 10, canvas.height - 50);
         ctx.font = '20px Arial';
         ctx.fillStyle = 'white';
         ctx.fillText(`USOS RESTANTES: ${me.spyUsesLeft}`, 10, canvas.height - 80);
     }
-
     drawChat();
     if (isMenuOpen) {
         drawMenu();
     }
 }
-
 function drawChat() {
     if (chatMessages.length === 0) return;
     ctx.save();
@@ -437,7 +389,6 @@ function drawChat() {
     });
     ctx.restore();
 }
-
 function drawMenu() {
     const me = gameState.players[myId];
     if (!me) return;
@@ -469,7 +420,7 @@ function drawMenu() {
                 { text: 'ARQUEIRO', ability: 'archer', rect: getArcherButtonRect() },
                 { text: 'ENGENHEIRO', ability: 'engineer', rect: getEngineerButtonRect() },
                 { text: 'FORMIGA', ability: 'ant', rect: getAntButtonRect() },
-                { text: 'ESPIÃO', ability: 'spy', rect: getSpyButtonRect() } // Novo botão
+                { text: 'ESPIÃO', ability: 'spy', rect: getSpyButtonRect() }
             ];
             buttons.forEach(btn => {
                 const isTaken = gameState.takenAbilities.includes(btn.ability);
@@ -505,7 +456,6 @@ function drawMenu() {
     ctx.textAlign = 'center';
     ctx.fillText('PRESSIONE "B" PARA FECHAR', canvas.width / 2 + 580, menuY + menuHeight - 20);
 }
-
 function isClickInside(pos, rect) {
     return pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height;
 }
@@ -547,14 +497,10 @@ function getAntButtonRect() {
     const mY = (canvas.height - 400) / 2;
     return { x: canvas.width / 2 - 150, y: mY + 500, width: 300, height: 50 };
 }
-// Nova função para a posição do botão
 function getSpyButtonRect() {
     const mY = (canvas.height - 400) / 2;
     return { x: canvas.width / 2 - 150, y: mY + 575, width: 300, height: 50 };
 }
-
-
-// --- GAME LOOP ---
 function gameLoop() {
     if (myId && gameState.players[myId]) {
         const me = gameState.players[myId];
@@ -564,6 +510,4 @@ function gameLoop() {
     draw();
     requestAnimationFrame(gameLoop);
 }
-
-// Inicia o jogo
 gameLoop();

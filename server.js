@@ -1,18 +1,10 @@
-// =============================================================
-//                           SCRIPT DO SERVIDOR
-// =============================================================
-
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
-
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
-
 app.use(express.static(__dirname));
-
-// --- CONSTANTES DO JOGO ---
 const PORT = process.env.PORT || 3000;
 const TICK_RATE = 1000 / 60;
 const WORLD_WIDTH = 6000;
@@ -37,24 +29,18 @@ const BOX_COLLISION_DAMPING = 0.90;
 const ANGULAR_FRICTION = 0.95;
 const TORQUE_FACTOR = 0.000008;
 const ZOMBIE_SPEED_BOOST = 1.15;
-
-// --- NOVAS CONSTANTES PARA A HABILIDADE ESPIÃO ---
-const SPY_DURATION = 20000; // 20 segundos de duração
-const SPY_COOLDOWN = 45000; // 45 segundos de recarga
-
-const ROUND_DURATION = 120; // 2 minutos
-
+const SPY_DURATION = 20000;
+const SPY_COOLDOWN = 45000;
+const ROUND_DURATION = 120;
 const ABILITY_COSTS = {
-    chameleon: 120,
-    athlete: 100,
-    archer: 150,
-    engineer: 200,
-    ant: 200,
-    spy: 180 // Custo da nova habilidade
+    chameleon: 20,
+    athlete: 10,
+    archer: 10,
+    engineer: 20,
+    ant: 20,
+    spy: 50
 };
-
 let gameState = {};
-
 function initializeGame() {
     gameState = {
         players: {},
@@ -100,7 +86,6 @@ function initializeGame() {
     buildWalls(gameState.house);
     buildWalls(gameState.garage);
 }
-
 function buildWalls(structure) {
     const s = structure;
     const wt = s.wallThickness;
@@ -130,14 +115,12 @@ function buildWalls(structure) {
         s.walls.push({ x: s.x + s.width - wt + 1200, y: s.y + 460, width: wt, height: 140 });
     }
 }
-
 function isColliding(rect1, rect2) {
     if (!rect1 || !rect2) {
         return false;
     }
     return rect1.x < rect2.x + rect2.width && rect1.x + rect1.width > rect2.x && rect1.y < rect2.y + rect2.height && rect1.y + rect1.height > rect2.y;
 }
-
 function createNewPlayer(socket) {
     gameState.players[socket.id] = {
         name: `Player${Math.floor(100 + Math.random() * 900)}`,
@@ -157,11 +140,9 @@ function createNewPlayer(socket) {
         sprintAvailable: true,
         isAnt: false,
         antAvailable: true,
-        // --- NOVOS ATRIBUTOS PARA O ESPIÃO ---
         isSpying: false,
         spyUsesLeft: 2,
         spyCooldown: false,
-        // --- FIM DOS NOVOS ATRIBUTOS ---
         isHidden: false,
         arrowAmmo: 0,
         engineerAbilityUsed: false,
@@ -175,7 +156,6 @@ function createNewPlayer(socket) {
         }
     };
 }
-
 function getVertices(rect) {
     const vertices = [];
     const cx = rect.x + rect.width / 2;
@@ -197,7 +177,6 @@ function getVertices(rect) {
     }
     return vertices;
 }
-
 function getAxes(vertices) {
     const axes = [];
     for (let i = 0; i < vertices.length; i++) {
@@ -210,7 +189,6 @@ function getAxes(vertices) {
     }
     return [axes[0], axes[1]];
 }
-
 function project(vertices, axis) {
     let min = Infinity;
     let max = -Infinity;
@@ -221,7 +199,6 @@ function project(vertices, axis) {
     }
     return { min, max };
 }
-
 function checkCollisionSAT(poly1, poly2) {
     const vertices1 = getVertices(poly1);
     const vertices2 = getVertices(poly2);
@@ -251,10 +228,8 @@ function checkCollisionSAT(poly1, poly2) {
     }
     return mtv;
 }
-
 function updateGameState() {
     const allCollidables = [...gameState.box, ...gameState.furniture];
-
     for (let i = 0; i < allCollidables.length; i++) {
         const item1 = allCollidables[i];
         for (let j = i + 1; j < allCollidables.length; j++) {
@@ -306,7 +281,6 @@ function updateGameState() {
         if (item1.y < 0) { item1.y = 0; item1.vy *= -0.5; }
         if (item1.y + item1.height > WORLD_HEIGHT) { item1.y = WORLD_HEIGHT - item1.height; item1.vy *= -0.5; }
     }
-
     for (const id in gameState.players) {
         const player = gameState.players[id];
         const hitboxWidth = player.width * 0.4;
@@ -411,7 +385,6 @@ function updateGameState() {
             }
         }
     }
-
     if (gameState.gamePhase === 'running') {
         const players = gameState.players;
         const playerIds = Object.keys(players);
@@ -424,12 +397,9 @@ function updateGameState() {
                 for (const id2 of playerIds) {
                     if (id1 === id2) continue;
                     const player2 = players[id2];
-                    
-                    // --- LÓGICA DE INFECÇÃO ATUALIZADA ---
-                    // Um zumbi pode infectar um humano ou um espião disfarçado
                     if ((player2.role === 'human' || player2.isSpying) && isColliding(player1.hitbox, player2.hitbox)) {
                         if (player2.isSpying) {
-                            player2.isSpying = false; // Cancela o disfarce
+                            player2.isSpying = false;
                         }
                         player2.role = 'zombie';
                         player2.speed *= ZOMBIE_SPEED_BOOST;
@@ -441,7 +411,6 @@ function updateGameState() {
         }
         if (hasZombies) {
             for (const id of playerIds) {
-                // Um espião não conta como humano para a condição de vitória
                 if (players[id].role === 'human' && !players[id].isSpying) {
                     humanCount++;
                 }
@@ -464,7 +433,6 @@ function updateGameState() {
             }
         }
     }
-
     gameState.arrows.forEach((arrow, index) => {
         arrow.x += Math.cos(arrow.angle) * ARROW_SPEED;
         arrow.y += Math.sin(arrow.angle) * ARROW_SPEED;
@@ -473,11 +441,9 @@ function updateGameState() {
         }
     });
 }
-
 io.on('connection', (socket) => {
     console.log('Novo jogador conectado:', socket.id);
     createNewPlayer(socket);
-
     socket.on('playerInput', (inputData) => {
         const player = gameState.players[socket.id];
         if (player) {
@@ -485,7 +451,6 @@ io.on('connection', (socket) => {
             player.rotation = inputData.rotation;
         }
     });
-
     socket.on('chooseAbility', (ability) => {
         const player = gameState.players[socket.id];
         const cost = ABILITY_COSTS[ability];
@@ -501,7 +466,6 @@ io.on('connection', (socket) => {
             }
         }
     });
-
     socket.on('playerAction', (actionData) => {
         const player = gameState.players[socket.id];
         if (!player) return;
@@ -561,23 +525,18 @@ io.on('connection', (socket) => {
                     if (gameState.players[socket.id]) player.antAvailable = true;
                 }, ANT_COOLDOWN);
             }
-            // --- LÓGICA DE ATIVAÇÃO DA HABILIDADE ESPIÃO ---
             if (player.activeAbility === 'spy' && player.spyUsesLeft > 0 && !player.spyCooldown && !player.isSpying) {
                 player.isSpying = true;
                 player.spyUsesLeft--;
                 player.spyCooldown = true;
-
-                // Duração do disfarce (20 segundos)
                 setTimeout(() => {
                     if (gameState.players[socket.id]) {
                         player.isSpying = false;
                     }
                 }, SPY_DURATION);
-                
-                // Cooldown para poder usar novamente (45 segundos)
                 setTimeout(() => {
                     if (gameState.players[socket.id]) {
-                         player.spyCooldown = false;
+                        player.spyCooldown = false;
                     }
                 }, SPY_COOLDOWN);
             }
@@ -602,7 +561,6 @@ io.on('connection', (socket) => {
             }
         }
     });
-
     socket.on('sendMessage', (text) => {
         const player = gameState.players[socket.id];
         if (player && text && text.trim().length > 0) {
@@ -613,7 +571,6 @@ io.on('connection', (socket) => {
             io.emit('newMessage', message);
         }
     });
-
     socket.on('disconnect', () => {
         console.log('Jogador desconectado:', socket.id);
         const player = gameState.players[socket.id];
@@ -623,7 +580,6 @@ io.on('connection', (socket) => {
         delete gameState.players[socket.id];
     });
 });
-
 setInterval(() => {
     if (!gameState || !gameState.players) {
         return;
@@ -631,7 +587,6 @@ setInterval(() => {
     updateGameState();
     io.emit('gameStateUpdate', gameState);
 }, TICK_RATE);
-
 setInterval(() => {
     if (gameState && gameState.players && Object.keys(gameState.players).length > 0) {
         if (gameState.gamePhase === 'waiting') {
@@ -686,7 +641,6 @@ setInterval(() => {
                     player.sprintAvailable = true;
                     player.isAnt = false;
                     player.antAvailable = true;
-                    // Reset do espião no final da rodada
                     player.isSpying = false;
                     player.spyUsesLeft = 2;
                     player.spyCooldown = false;
@@ -701,7 +655,6 @@ setInterval(() => {
         }
     }
 }, 1000);
-
 server.listen(PORT, () => {
     initializeGame();
     console.log(`🚀 Servidor do jogo rodando em http://localhost:${PORT}`);
