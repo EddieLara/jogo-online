@@ -25,10 +25,10 @@ const ANT_COOLDOWN = 45000;
 const ANT_SIZE_FACTOR = 0.1;
 const ANT_SPEED_FACTOR = 0.7;
 const ARROW_SPEED = 20;
-const BOX_FRICTION = 0.90;
-const BOX_PUSH_FORCE = 0.10;
-const BOX_COLLISION_DAMPING = 0.90;
-const ANGULAR_FRICTION = 0.95;
+const BOX_FRICTION = 0.94;
+const BOX_PUSH_FORCE = 0.15;
+const BOX_COLLISION_DAMPING = 0.80;
+const ANGULAR_FRICTION = 0.80;
 const TORQUE_FACTOR = 0.000008;
 const ZOMBIE_SPEED_BOOST = 1.15;
 const SPY_DURATION = 20000;
@@ -389,54 +389,58 @@ function updateGameState() {
                 break;
             }
         }
-        const playerPoly = { ...player.hitbox, rotation: 0 };
-        for (const item of allCollidables) {
-            const mtv = checkCollisionSAT(playerPoly, item);
-            if (mtv) {
-                if (player.hasSkateboard) { 
-                    player.x -= mtv.x;
-                    player.y -= mtv.y;
-                    continue;
-                }
-                let pushDirectionX = 0;
-                let pushDirectionY = 0;
-                if (player.input.movement.up) { pushDirectionY -= 1; }
-                if (player.input.movement.down) { pushDirectionY += 1; }
-                if (player.input.movement.left) { pushDirectionX -= 1; }
-                if (player.input.movement.right) { pushDirectionX += 1; }
-                const pushForceX = pushDirectionX * BOX_PUSH_FORCE;
-                const pushForceY = pushDirectionY * BOX_PUSH_FORCE;
-                const predictedItem = {
-                    ...item,
-                    x: item.x + item.vx + pushForceX,
-                    y: item.y + item.vy + pushForceY
-                };
-                let wouldCollideWithWall = false;
-                const staticObstacles = [...gameState.house.walls, ...gameState.garage.walls, gameState.chest];
-                for (const obstacle of staticObstacles) {
-                    if (checkCollisionSAT(predictedItem, obstacle)) {
-                        wouldCollideWithWall = true;
-                        break;
-                    }
-                }
-                if (wouldCollideWithWall) {
-                    player.x -= mtv.x;
-                    player.y -= mtv.y;
-                } else {
-                    player.x -= mtv.x;
-                    player.y -= mtv.y;
-                    const len = Math.sqrt(pushDirectionX * pushDirectionX + pushDirectionY * pushDirectionY);
-                    if (len > 0) {
-                        item.vx += pushForceX;
-                        item.vy += pushForceY;
-                        const contactVectorX = (player.x + player.width / 2) - (item.x + item.width / 2);
-                        const contactVectorY = (player.y + player.height / 2) - (item.y + item.height / 2);
-                        const torque = (contactVectorX * pushDirectionY - contactVectorY * pushDirectionX) * TORQUE_FACTOR;
-                        item.angularVelocity += torque;
-                    }
-                }
-            }
-        }
+      const playerPoly = { ...player.hitbox, rotation: 0 };
+      for (const item of allCollidables) {
+          const mtv = checkCollisionSAT(playerPoly, item);
+          if (mtv) {
+              if (player.hasSkateboard) {
+                  player.x -= mtv.x;
+                  player.y -= mtv.y;
+                  continue;
+              }
+
+              player.x -= mtv.x;
+              player.y -= mtv.y;
+
+              let pushDirectionX = 0;
+              let pushDirectionY = 0;
+              if (player.input.movement.up) { pushDirectionY -= 1; }
+              if (player.input.movement.down) { pushDirectionY += 1; }
+              if (player.input.movement.left) { pushDirectionX -= 1; }
+              if (player.input.movement.right) { pushDirectionX += 1; }
+              
+              const isPushing = Math.sqrt(pushDirectionX * pushDirectionX + pushDirectionY * pushDirectionY) > 0;
+
+              if (isPushing) {
+                  const contactVectorX = (player.x + player.width / 2) - (item.x + item.width / 2);
+                  const contactVectorY = (player.y + player.height / 2) - (item.y + item.height / 2);
+                  const torque = (contactVectorX * pushDirectionY - contactVectorY * pushDirectionX) * TORQUE_FACTOR;
+                  item.angularVelocity += torque;
+              }
+
+              const pushForceX = pushDirectionX * BOX_PUSH_FORCE;
+              const pushForceY = pushDirectionY * BOX_PUSH_FORCE;
+              const predictedItem = {
+                  ...item,
+                  x: item.x + item.vx + pushForceX,
+                  y: item.y + item.vy + pushForceY
+              };
+
+              let wouldCollideWithWall = false;
+              const staticObstacles = [...gameState.house.walls, ...gameState.garage.walls, gameState.chest];
+              for (const obstacle of staticObstacles) {
+                  if (checkCollisionSAT(predictedItem, obstacle)) {
+                      wouldCollideWithWall = true;
+                      break;
+                  }
+              }
+
+              if (!wouldCollideWithWall && isPushing) {
+                  item.vx += pushForceX;
+                  item.vy += pushForceY;
+              }
+          }
+      }
         const allWalls = [...gameState.house.walls, ...gameState.garage.walls];
         for (const wall of allWalls) {
             playerPoly.x = player.x + (player.width - player.hitbox.width) / 2;

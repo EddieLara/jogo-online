@@ -29,7 +29,7 @@ const ctx = canvas.getContext('2d');
     window.addEventListener('resize', resizeCanvas);
 })();
 
-const socket = io('https://jogo-online-medv.onrender.com');
+const socket = io();
 
 function loadImage(src) {
     const img = new Image();
