@@ -33,7 +33,6 @@ const ZOMBIE_SPEED_BOOST = 1.15;
 const SPY_DURATION = 20000;
 const SPY_COOLDOWN = 45000;
 const ROUND_DURATION = 120;
-// <-- CONSTANTES DO SKATE
 const SKATEBOARD_SPEED_BOOST = 7;
 const SKATEBOARD_WIDTH = 90;
 const SKATEBOARD_HEIGHT = 35;
@@ -49,7 +48,6 @@ let gameState = {};
 
 function spawnSkateboard() {
     if (!gameState.skateboard) return;
-    // Area da rua: x: 3090, y: 0, width: 1000, height: 2000
     const streetArea = { x: 3090, y: 0, width: 1000, height: 2000 };
     gameState.skateboard.x = streetArea.x + Math.random() * (streetArea.width - SKATEBOARD_WIDTH);
     gameState.skateboard.y = streetArea.y + Math.random() * (streetArea.height - SKATEBOARD_HEIGHT);
@@ -67,7 +65,6 @@ function initializeGame() {
         gamePhase: 'waiting',
         startTime: 60,
         timeLeft: ROUND_DURATION,
-        // <-- ESTADO DO SKATE
         skateboard: {
             x: 0,
             y: 0,
@@ -175,7 +172,7 @@ function createNewPlayer(socket) {
         isInDuct: false,
         footprintCooldown: 0,
         inventory: [],
-        hasSkateboard: false, // <-- PROPRIEDADE DO SKATE NO JOGADOR
+        hasSkateboard: false,
         input: {
             movement: { up: false, down: false, left: false, right: false },
             mouse: { x: 0, y: 0 },
@@ -310,7 +307,7 @@ function updateGameState() {
         if (item1.y + item1.height > WORLD_HEIGHT) { item1.y = WORLD_HEIGHT - item1.height; item1.vy *= -0.5; }
     }
 
-    // ===== INÍCIO DO BLOCO DE MOVIMENTO DO JOGADOR (QUE ESTAVA FALTANDO) =====
+    // ===== MOVIMENTAÇÃO DOS JOGADORES =====
     for (const id in gameState.players) {
         const player = gameState.players[id];
         const hitboxWidth = player.width * 0.4;
@@ -451,8 +448,6 @@ function updateGameState() {
             }
         }
     }
-    // ===== FIM DO BLOCO DE MOVIMENTO DO JOGADOR =====
-
 
     // Lógica de infecção
     if (gameState.gamePhase === 'running') {
@@ -644,18 +639,17 @@ io.on('connection', (socket) => {
             }
         }
         if (actionData.type === 'interact') {
-            // <-- LÓGICA DE INTERAÇÃO COM SKATE
             if (!player.hasSkateboard && gameState.skateboard && gameState.skateboard.spawned && !gameState.skateboard.ownerId) {
                 const skate = gameState.skateboard;
                 const dx = (player.x + player.width / 2) - (skate.x + skate.width / 2);
                 const dy = (player.y + player.height / 2) - (skate.y + skate.height / 2);
                 const distance = Math.sqrt(dx * dx + dy * dy);
 
-                if (distance < 100) { // Raio de interação
+                if (distance < 100) {
                     player.hasSkateboard = true;
                     skate.ownerId = player.id;
-                    skate.spawned = false; // Marca como pego
-                    return; // Impede outras interações (como duto) no mesmo tick
+                    skate.spawned = false;
+                    return;
                 }
             }
 
@@ -711,20 +705,16 @@ setInterval(() => {
 }, TICK_RATE);
 
 setInterval(() => {
-    // Não faz nada se o jogo não começou ou não há jogadores
     if (!gameState || !gameState.players || Object.keys(gameState.players).length === 0) {
         return;
     }
 
-    // Lógica para a fase de espera (antes do início da rodada)
     if (gameState.gamePhase === 'waiting') {
         gameState.startTime--;
         if (gameState.startTime <= 0) {
-            // Transiciona o jogo para a fase de 'rodada em andamento'
             gameState.gamePhase = 'running';
             gameState.timeLeft = ROUND_DURATION;
 
-            // Escolhe o zumbi inicial imediatamente
             const playerIds = Object.keys(gameState.players);
             if (playerIds.length > 0) {
                 const randomIndex = Math.floor(Math.random() * playerIds.length);
@@ -732,7 +722,6 @@ setInterval(() => {
                 const zombiePlayer = gameState.players[zombieId];
                 if (zombiePlayer) {
 
-                    // Se o primeiro zumbi tinha um skate, ele o solta.
                     if (zombiePlayer.hasSkateboard) {
                         zombiePlayer.hasSkateboard = false;
                         gameState.skateboard.spawned = true; 
@@ -749,11 +738,9 @@ setInterval(() => {
             }
         }
     }
-    // Lógica para a fase de rodada em andamento
     else if (gameState.gamePhase === 'running') {
         gameState.timeLeft--;
 
-        // Lógica que acontece a cada segundo durante a rodada (moedas e crescimento)
         for (const id in gameState.players) {
             const player = gameState.players[id];
             player.coins += 1;
@@ -768,13 +755,10 @@ setInterval(() => {
             }
         }
 
-        // Verifica se o tempo da rodada acabou
         if (gameState.timeLeft <= 0) {
             console.log("O tempo acabou! Humanos venceram a rodada.");
             io.emit('newMessage', { name: 'Servidor', text: 'O tempo acabou! Os Humanos sobreviveram!' });
             
-            // <-- INÍCIO DA MODIFICAÇÃO
-            // Verifica o status do skate ANTES de reiniciar o jogo.
             const skateWasOnGround = gameState.skateboard.spawned;
             let skateOwnerId = null;
             for (const id in gameState.players) {
@@ -783,26 +767,20 @@ setInterval(() => {
                     break;
                 }
             }
-            // <-- FIM DA MODIFICAÇÃO
 
             const currentPlayers = gameState.players;
             initializeGame();
             gameState.players = currentPlayers;
             
-            // <-- INÍCIO DA MODIFICAÇÃO
-            // A condição agora é: se estava no chão ou não estava em jogo, spowna um novo.
             if (skateWasOnGround || !skateOwnerId) {
                 spawnSkateboard();
             } else {
-                // Se não, o skate continua com o dono. Apenas restauramos o ID do dono.
                 gameState.skateboard.ownerId = skateOwnerId;
                 gameState.skateboard.spawned = false;
             }
-            // <-- FIM DA MODIFICAÇÃO
             
             for (const id in gameState.players) {
                 const player = gameState.players[id];
-                // Reinicia completamente os status do jogador para a nova rodada
                 player.x = WORLD_WIDTH / 2 + 500;
                 player.y = WORLD_HEIGHT / 2;
                 player.role = 'human';
@@ -821,14 +799,9 @@ setInterval(() => {
                 player.engineerAbilityUsed = false;
                 player.isInDuct = false;
                 
-                // Reseta o status 'hasSkateboard' para todos, exceto o dono.
                 if (id !== skateOwnerId) {
                     player.hasSkateboard = false;
                 }
-
-                player.width = INITIAL_PLAYER_SIZE;
-                player.height = INITIAL_PLAYER_SIZE * 1.25;
-                player.speed = INITIAL_PLAYER_SPEED;
             }
         }
     }

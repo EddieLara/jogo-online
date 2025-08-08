@@ -55,7 +55,7 @@ const smallBed = loadImage('Sprites/smallBed.png');
 const smallTable = loadImage('Sprites/smallTable.png');
 const bigTable = loadImage('Sprites/bigTable.png');
 const car = loadImage('Sprites/Car.png');
-const skateboardSprite = loadImage('Sprites/Skateboard.png'); // <-- IMAGEM DO SKATE ADICIONADA
+const skateboardSprite = loadImage('Sprites/Skateboard.png');
 let myId = null;
 let gameState = { players: {}, arrows: [], timeLeft: 120, startTime: 60, gamePhase: 'waiting', abilityCosts: {} };
 const movement = { up: false, down: false, left: false, right: false };
@@ -196,7 +196,6 @@ function draw() {
     ctx.drawImage(street, 3090, 0, 1000, 2000);
     ctx.drawImage(chest, 2890, 825, 200, 240);
 
-    // <-- DESENHA O SKATE NO CHÃO SE ESTIVER SPAWNADO
     if (gameState.skateboard && gameState.skateboard.spawned) {
         const skate = gameState.skateboard;
         ctx.drawImage(skateboardSprite, skate.x, skate.y, skate.width, skate.height);
@@ -258,10 +257,9 @@ function draw() {
             ctx.rotate(player.rotation);
         }
 
-        // DESENHA O SKATE EMBAIXO DO JOGADOR
         if (player.hasSkateboard && gameState.skateboard) {
             const skate = gameState.skateboard;
-            // Centraliza o skate e o posiciona um pouco abaixo do centro do jogador
+
             ctx.drawImage(skateboardSprite, -skate.width / 2, player.height / 2 - 55, skate.width, skate.height);
         }
 
@@ -523,8 +521,7 @@ function gameLoop() {
     if (myId && gameState.players[myId]) {
         const me = gameState.players[myId];
         const rot = getPlayerAngle(me);
-        // A movimentação com o skate é gerenciada pelo servidor, mas o cliente continua enviando
-        // o estado dos botões e a rotação do mouse. O servidor decidirá como usar essa informação.
+
         socket.emit('playerInput', { movement: movement, mouse: mouse, rotation: rot });
     }
     draw();
