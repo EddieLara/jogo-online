@@ -28,7 +28,9 @@ const ctx = canvas.getContext('2d');
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 })();
-const socket = io();
+
+const socket = io('https://jogo-online-medv.onrender.com');
+
 function loadImage(src) {
     const img = new Image();
     img.src = src;
