@@ -5,7 +5,6 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 app.use(express.static(__dirname));
-
 const PORT = process.env.PORT || 3000;
 const TICK_RATE = 1000 / 60;
 const WORLD_WIDTH = 6000;
@@ -33,10 +32,6 @@ const ZOMBIE_SPEED_BOOST = 1.15;
 const SPY_DURATION = 20000;
 const SPY_COOLDOWN = 45000;
 const ROUND_DURATION = 120;
-// <-- CONSTANTES DO SKATE
-const SKATEBOARD_SPEED_BOOST = 7;
-const SKATEBOARD_WIDTH = 90;
-const SKATEBOARD_HEIGHT = 35;
 const ABILITY_COSTS = {
     chameleon: 20,
     athlete: 10,
@@ -46,18 +41,6 @@ const ABILITY_COSTS = {
     spy: 50
 };
 let gameState = {};
-
-function spawnSkateboard() {
-    if (!gameState.skateboard) return;
-    // Area da rua: x: 3090, y: 0, width: 1000, height: 2000
-    const streetArea = { x: 3090, y: 0, width: 1000, height: 2000 };
-    gameState.skateboard.x = streetArea.x + Math.random() * (streetArea.width - SKATEBOARD_WIDTH);
-    gameState.skateboard.y = streetArea.y + Math.random() * (streetArea.height - SKATEBOARD_HEIGHT);
-    gameState.skateboard.spawned = true;
-    gameState.skateboard.ownerId = null;
-    console.log(`Skateboard spawned at ${gameState.skateboard.x.toFixed(0)}, ${gameState.skateboard.y.toFixed(0)}`);
-}
-
 function initializeGame() {
     gameState = {
         players: {},
@@ -67,15 +50,6 @@ function initializeGame() {
         gamePhase: 'waiting',
         startTime: 60,
         timeLeft: ROUND_DURATION,
-        // <-- ESTADO DO SKATE
-        skateboard: {
-            x: 0,
-            y: 0,
-            width: SKATEBOARD_WIDTH,
-            height: SKATEBOARD_HEIGHT,
-            spawned: false,
-            ownerId: null
-        },
         box: [
             { x: 1000, y: 1500, width: 128, height: 128, vx: 0, vy: 0, rotation: 100, angularVelocity: 0 },
             { x: 2720, y: 1670, width: 128, height: 128, vx: 0, vy: 0, rotation: 200, angularVelocity: 0 },
@@ -175,7 +149,6 @@ function createNewPlayer(socket) {
         isInDuct: false,
         footprintCooldown: 0,
         inventory: [],
-        hasSkateboard: false, // <-- PROPRIEDADE DO SKATE NO JOGADOR
         input: {
             movement: { up: false, down: false, left: false, right: false },
             mouse: { x: 0, y: 0 },
@@ -255,7 +228,6 @@ function checkCollisionSAT(poly1, poly2) {
     }
     return mtv;
 }
-
 function updateGameState() {
     const allCollidables = [...gameState.box, ...gameState.furniture];
     for (let i = 0; i < allCollidables.length; i++) {
@@ -309,8 +281,6 @@ function updateGameState() {
         if (item1.y < 0) { item1.y = 0; item1.vy *= -0.5; }
         if (item1.y + item1.height > WORLD_HEIGHT) { item1.y = WORLD_HEIGHT - item1.height; item1.vy *= -0.5; }
     }
-
-    // ===== INÍCIO DO BLOCO DE MOVIMENTO DO JOGADOR (QUE ESTAVA FALTANDO) =====
     for (const id in gameState.players) {
         const player = gameState.players[id];
         const hitboxWidth = player.width * 0.4;
@@ -321,38 +291,7 @@ function updateGameState() {
             x: player.x + (player.width - hitboxWidth) / 2,
             y: player.y + (player.height - hitboxHeight) / 2,
         };
-
-        if (player.hasSkateboard) {
-            if (player.activeAbility === 'chameleon' && player.isCamouflaged) {
-                player.isCamouflaged = false;
-            }
-            const originalX = player.x;
-            const originalY = player.y;
-            const skateSpeed = SKATEBOARD_SPEED_BOOST;
-            const angle = player.rotation;
-            
-            player.x += Math.cos(angle) * skateSpeed;
-            player.hitbox.x = player.x + (player.width - player.hitbox.width) / 2;
-            let collidedX = false;
-            for (const wall of [...gameState.house.walls, ...gameState.garage.walls]) { if (isColliding(player.hitbox, wall)) { collidedX = true; } }
-            if (isColliding(player.hitbox, gameState.chest)) { collidedX = true; }
-            if (player.x < 0 || player.x + player.width > WORLD_WIDTH) { collidedX = true; }
-            if (collidedX) {
-                player.x = originalX;
-                player.hitbox.x = player.x + (player.width - player.hitbox.width) / 2;
-            }
-
-            player.y += Math.sin(angle) * skateSpeed;
-            player.hitbox.y = player.y + (player.height - player.hitbox.height) / 2;
-            let collidedY = false;
-            for (const wall of [...gameState.house.walls, ...gameState.garage.walls]) { if (isColliding(player.hitbox, wall)) { collidedY = true; } }
-            if (isColliding(player.hitbox, gameState.chest)) { collidedY = true; }
-            if (player.y < 0 || player.y + player.height > WORLD_HEIGHT) { collidedY = true; }
-            if (collidedY) {
-                player.y = originalY;
-                player.hitbox.y = player.y + (player.height - player.hitbox.height) / 2;
-            }
-        } else if (player.input.movement.up || player.input.movement.down || player.input.movement.left || player.input.movement.right) {
+        if (player.input.movement.up || player.input.movement.down || player.input.movement.left || player.input.movement.right) {
             if (player.activeAbility === 'chameleon' && player.isCamouflaged) {
                 player.isCamouflaged = false;
             }
@@ -396,11 +335,6 @@ function updateGameState() {
         for (const item of allCollidables) {
             const mtv = checkCollisionSAT(playerPoly, item);
             if (mtv) {
-                if (player.hasSkateboard) { 
-                    player.x -= mtv.x;
-                    player.y -= mtv.y;
-                    continue;
-                }
                 let pushDirectionX = 0;
                 let pushDirectionY = 0;
                 if (player.input.movement.up) { pushDirectionY -= 1; }
@@ -451,10 +385,6 @@ function updateGameState() {
             }
         }
     }
-    // ===== FIM DO BLOCO DE MOVIMENTO DO JOGADOR =====
-
-
-    // Lógica de infecção
     if (gameState.gamePhase === 'running') {
         const players = gameState.players;
         const playerIds = Object.keys(players);
@@ -468,15 +398,6 @@ function updateGameState() {
                     if (id1 === id2) continue;
                     const player2 = players[id2];
                     if ((player2.role === 'human' || player2.isSpying) && isColliding(player1.hitbox, player2.hitbox)) {
-                        
-                        if (player2.hasSkateboard) {
-                            player2.hasSkateboard = false;
-                            gameState.skateboard.spawned = true;
-                            gameState.skateboard.ownerId = null;
-                            gameState.skateboard.x = player2.x;
-                            gameState.skateboard.y = player2.y + player2.height;
-                        }
-
                         if (player2.isSpying) {
                             player2.isSpying = false;
                         }
@@ -497,27 +418,9 @@ function updateGameState() {
             if (humanCount === 0 && playerIds.length > 0) {
                 console.log("Todos os humanos foram infectados! Reiniciando a partida.");
                 io.emit('newMessage', { name: 'Servidor', text: 'Os Zumbis venceram!' });
-
-                const skateWasOnGround = gameState.skateboard.spawned;
-                let skateOwnerId = null;
-                for (const id in gameState.players) {
-                    if (gameState.players[id].hasSkateboard) {
-                        skateOwnerId = id;
-                        break;
-                    }
-                }
-
                 const currentPlayers = gameState.players;
                 initializeGame();
                 gameState.players = currentPlayers;
-
-                if (skateWasOnGround || !skateOwnerId) {
-                    spawnSkateboard();
-                } else {
-                    gameState.skateboard.ownerId = skateOwnerId;
-                    gameState.skateboard.spawned = false;
-                }
-                
                 for (const id in gameState.players) {
                     const player = gameState.players[id];
                     player.x = WORLD_WIDTH / 2 + 500;
@@ -526,10 +429,6 @@ function updateGameState() {
                     player.activeAbility = ' ';
                     player.width = INITIAL_PLAYER_SIZE;
                     player.height = INITIAL_PLAYER_SIZE * 1.25;
-                    player.speed = INITIAL_PLAYER_SPEED;
-                    if (id !== skateOwnerId) {
-                        player.hasSkateboard = false;
-                    }
                 }
             }
         }
@@ -542,7 +441,6 @@ function updateGameState() {
         }
     });
 }
-
 io.on('connection', (socket) => {
     console.log('Novo jogador conectado:', socket.id);
     createNewPlayer(socket);
@@ -644,21 +542,6 @@ io.on('connection', (socket) => {
             }
         }
         if (actionData.type === 'interact') {
-            // <-- LÓGICA DE INTERAÇÃO COM SKATE
-            if (!player.hasSkateboard && gameState.skateboard && gameState.skateboard.spawned && !gameState.skateboard.ownerId) {
-                const skate = gameState.skateboard;
-                const dx = (player.x + player.width / 2) - (skate.x + skate.width / 2);
-                const dy = (player.y + player.height / 2) - (skate.y + skate.height / 2);
-                const distance = Math.sqrt(dx * dx + dy * dy);
-
-                if (distance < 100) { // Raio de interação
-                    player.hasSkateboard = true;
-                    skate.ownerId = player.id;
-                    skate.spawned = false; // Marca como pego
-                    return; // Impede outras interações (como duto) no mesmo tick
-                }
-            }
-
             if (player.activeAbility === 'engineer' && !player.engineerAbilityUsed && !player.isInDuct) {
                 for (let i = 0; i < gameState.ducts.length; i++) {
                     if (isColliding(player.hitbox, gameState.ducts[i])) {
@@ -691,13 +574,8 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         console.log('Jogador desconectado:', socket.id);
         const player = gameState.players[socket.id];
-        if (player) {
-            if (player.activeAbility !== ' ') {
-                gameState.takenAbilities = gameState.takenAbilities.filter(ability => ability !== player.activeAbility);
-            }
-            if (player.hasSkateboard) { // Se o jogador sair com o skate, ele reaparece
-                spawnSkateboard();
-            }
+        if (player && player.activeAbility !== ' ') {
+            gameState.takenAbilities = gameState.takenAbilities.filter(ability => ability !== player.activeAbility);
         }
         delete gameState.players[socket.id];
     });
@@ -709,133 +587,75 @@ setInterval(() => {
     updateGameState();
     io.emit('gameStateUpdate', gameState);
 }, TICK_RATE);
-
 setInterval(() => {
-    // Não faz nada se o jogo não começou ou não há jogadores
-    if (!gameState || !gameState.players || Object.keys(gameState.players).length === 0) {
-        return;
-    }
-
-    // Lógica para a fase de espera (antes do início da rodada)
-    if (gameState.gamePhase === 'waiting') {
-        gameState.startTime--;
-        if (gameState.startTime <= 0) {
-            // Transiciona o jogo para a fase de 'rodada em andamento'
-            gameState.gamePhase = 'running';
-            gameState.timeLeft = ROUND_DURATION;
-
-            // Escolhe o zumbi inicial imediatamente
-            const playerIds = Object.keys(gameState.players);
-            if (playerIds.length > 0) {
-                const randomIndex = Math.floor(Math.random() * playerIds.length);
-                const zombieId = playerIds[randomIndex];
-                const zombiePlayer = gameState.players[zombieId];
-                if (zombiePlayer) {
-
-                    // Se o primeiro zumbi tinha um skate, ele o solta.
-                    if (zombiePlayer.hasSkateboard) {
-                        zombiePlayer.hasSkateboard = false;
-                        gameState.skateboard.spawned = true; 
-                        gameState.skateboard.ownerId = null;
-                        gameState.skateboard.x = zombiePlayer.x;
-                        gameState.skateboard.y = zombiePlayer.y + zombiePlayer.height;
-                    }
-
+    if (gameState && gameState.players && Object.keys(gameState.players).length > 0) {
+        if (gameState.gamePhase === 'waiting') {
+            if (gameState.startTime > 0) {
+                gameState.startTime--;
+            } else {
+                gameState.gamePhase = 'running';
+            }
+        } else if (gameState.gamePhase === 'running') {
+            if (gameState.timeLeft === ROUND_DURATION) {
+                const playerIds = Object.keys(gameState.players);
+                if (playerIds.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * playerIds.length);
+                    const zombieId = playerIds[randomIndex];
+                    const zombiePlayer = gameState.players[zombieId];
                     zombiePlayer.role = 'zombie';
                     zombiePlayer.speed *= ZOMBIE_SPEED_BOOST;
                     console.log(`A rodada começou! ${zombiePlayer.name} é o Zumbi inicial!`);
                     io.emit('newMessage', { name: 'Servidor', text: `A infecção começou! ${zombiePlayer.name} é o zumbi!` });
                 }
             }
-        }
-    }
-    // Lógica para a fase de rodada em andamento
-    else if (gameState.gamePhase === 'running') {
-        gameState.timeLeft--;
-
-        // Lógica que acontece a cada segundo durante a rodada (moedas e crescimento)
-        for (const id in gameState.players) {
-            const player = gameState.players[id];
-            player.coins += 1;
-            if (!player.isAnt) {
-                player.width += GROWTH_AMOUNT;
-                player.height += GROWTH_AMOUNT;
-            }
-            if (!player.isSprinting && !player.isAnt) {
-                const totalGrowth = player.width - INITIAL_PLAYER_SIZE;
-                let newSpeed = INITIAL_PLAYER_SPEED + (totalGrowth * SPEED_PER_PIXEL_OF_GROWTH);
-                player.speed = Math.min(newSpeed, MAX_PLAYER_SPEED);
-            }
-        }
-
-        // Verifica se o tempo da rodada acabou
-        if (gameState.timeLeft <= 0) {
-            console.log("O tempo acabou! Humanos venceram a rodada.");
-            io.emit('newMessage', { name: 'Servidor', text: 'O tempo acabou! Os Humanos sobreviveram!' });
-            
-            // <-- INÍCIO DA MODIFICAÇÃO
-            // Verifica o status do skate ANTES de reiniciar o jogo.
-            const skateWasOnGround = gameState.skateboard.spawned;
-            let skateOwnerId = null;
-            for (const id in gameState.players) {
-                if (gameState.players[id].hasSkateboard) {
-                    skateOwnerId = id;
-                    break;
+            if (gameState.timeLeft > 0) {
+                gameState.timeLeft--;
+                for (const id in gameState.players) {
+                    const player = gameState.players[id];
+                    player.coins += 1;
+                    if (!player.isAnt) {
+                        player.width += GROWTH_AMOUNT;
+                        player.height += GROWTH_AMOUNT;
+                    }
+                    if (!player.isSprinting && !player.isAnt) {
+                        const totalGrowth = player.width - INITIAL_PLAYER_SIZE;
+                        let newSpeed = INITIAL_PLAYER_SPEED + (totalGrowth * SPEED_PER_PIXEL_OF_GROWTH);
+                        player.speed = Math.min(newSpeed, MAX_PLAYER_SPEED);
+                    }
                 }
-            }
-            // <-- FIM DA MODIFICAÇÃO
-
-            const currentPlayers = gameState.players;
-            initializeGame();
-            gameState.players = currentPlayers;
-            
-            // <-- INÍCIO DA MODIFICAÇÃO
-            // A condição agora é: se estava no chão ou não estava em jogo, spowna um novo.
-            if (skateWasOnGround || !skateOwnerId) {
-                spawnSkateboard();
             } else {
-                // Se não, o skate continua com o dono. Apenas restauramos o ID do dono.
-                gameState.skateboard.ownerId = skateOwnerId;
-                gameState.skateboard.spawned = false;
-            }
-            // <-- FIM DA MODIFICAÇÃO
-            
-            for (const id in gameState.players) {
-                const player = gameState.players[id];
-                // Reinicia completamente os status do jogador para a nova rodada
-                player.x = WORLD_WIDTH / 2 + 500;
-                player.y = WORLD_HEIGHT / 2;
-                player.role = 'human';
-                player.activeAbility = ' ';
-                player.isCamouflaged = false;
-                player.camouflageAvailable = true;
-                player.isSprinting = false;
-                player.sprintAvailable = true;
-                player.isAnt = false;
-                player.antAvailable = true;
-                player.isSpying = false;
-                player.spyUsesLeft = 2;
-                player.spyCooldown = false;
-                player.isHidden = false;
-                player.arrowAmmo = 0;
-                player.engineerAbilityUsed = false;
-                player.isInDuct = false;
-                
-                // Reseta o status 'hasSkateboard' para todos, exceto o dono.
-                if (id !== skateOwnerId) {
-                    player.hasSkateboard = false;
+                console.log("O tempo acabou! Humanos venceram a rodada.");
+                io.emit('newMessage', { name: 'Servidor', text: 'O tempo acabou! Os Humanos sobreviveram!' });
+                const currentPlayers = gameState.players;
+                initializeGame();
+                gameState.players = currentPlayers;
+                for (const id in gameState.players) {
+                    const player = gameState.players[id];
+                    player.x = WORLD_WIDTH / 2 + 500;
+                    player.y = WORLD_HEIGHT / 2;
+                    player.role = 'human';
+                    player.activeAbility = ' ';
+                    player.isCamouflaged = false;
+                    player.camouflageAvailable = true;
+                    player.isSprinting = false;
+                    player.sprintAvailable = true;
+                    player.isAnt = false;
+                    player.antAvailable = true;
+                    player.isSpying = false;
+                    player.spyUsesLeft = 2;
+                    player.spyCooldown = false;
+                    player.isHidden = false;
+                    player.arrowAmmo = 0;
+                    player.engineerAbilityUsed = false;
+                    player.isInDuct = false;
+                    player.width = INITIAL_PLAYER_SIZE;
+                    player.height = INITIAL_PLAYER_SIZE * 1.25;
                 }
-
-                player.width = INITIAL_PLAYER_SIZE;
-                player.height = INITIAL_PLAYER_SIZE * 1.25;
-                player.speed = INITIAL_PLAYER_SPEED;
             }
         }
     }
 }, 1000);
-
 server.listen(PORT, () => {
     initializeGame();
-    spawnSkateboard();
     console.log(`🚀 Servidor do jogo rodando em http://localhost:${PORT}`);
 });
