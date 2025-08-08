@@ -116,6 +116,7 @@ window.addEventListener('keydown', function (event) {
         case 'd': case 'arrowright': movement.right = true; break;
         case 'e': socket.emit('playerAction', { type: 'interact' }); break;
         case 'c': socket.emit('playerAction', { type: 'ability' }); break;
+        case 'g': socket.emit('playerAction', { type: 'drop_skateboard' }); break;
     }
 });
 window.addEventListener('keyup', function (event) {
@@ -259,7 +260,6 @@ function draw() {
 
         if (player.hasSkateboard && gameState.skateboard) {
             const skate = gameState.skateboard;
-
             ctx.drawImage(skateboardSprite, -skate.width / 2, player.height / 2 - 55, skate.width, skate.height);
         }
 
@@ -448,7 +448,7 @@ function drawMenu() {
                 ctx.strokeRect(btn.rect.x - 10, btn.rect.y - 10, btn.rect.width + 10, btn.rect.height + 10);
                 ctx.font = '40px Arial';
                 ctx.textAlign = 'center';
-                const buttonText = isTaken ? `${btn.text} (INDISPONÍVEL)` : btn.text;
+                const buttonText = isTaken ? `${btn.text}` : btn.text;
                 ctx.fillText(buttonText, btn.rect.x + btn.rect.width / 2, btn.rect.y + 35);
                 ctx.font = '30px Arial';
                 ctx.textAlign = 'left';
@@ -521,7 +521,6 @@ function gameLoop() {
     if (myId && gameState.players[myId]) {
         const me = gameState.players[myId];
         const rot = getPlayerAngle(me);
-
         socket.emit('playerInput', { movement: movement, mouse: mouse, rotation: rot });
     }
     draw();

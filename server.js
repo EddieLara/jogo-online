@@ -1,4 +1,4 @@
-const express = require('express');z
+const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const app = express();
@@ -15,6 +15,7 @@ const INITIAL_PLAYER_SPEED = 2;
 const MAX_PLAYER_SPEED = 5;
 const SPEED_PER_PIXEL_OF_GROWTH = 0.05;
 const GROWTH_AMOUNT = 0.2;
+const ZOMBIE_DECAY_AMOUNT = 0.25;
 const DUCT_TRAVEL_TIME = 1000 / 20;
 const CAMOUFLAGE_COOLDOWN = 45000;
 const SPRINT_COOLDOWN = 45000;
@@ -91,7 +92,7 @@ function initializeGame() {
             { id: 'small_bed', x: 1850, y: 400, width: 108, height: 200, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
             { id: 'small_table', x: 2500, y: 600, width: 288, height: 132, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
             { id: 'big_table', x: 500, y: 1400, width: 480, height: 240, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
-            { id: 'car', x: 2150, y: 1350, width: 502, height: 302, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 }
+            { id: 'car', x: 3150, y: 150, width: 502, height: 302, vx: 0, vy: 0, rotation: 180, angularVelocity: 0 }
         ],
         chest: { x: 2890, y: 825, width: 200, height: 240 },
         ducts: [
@@ -307,7 +308,6 @@ function updateGameState() {
         if (item1.y + item1.height > WORLD_HEIGHT) { item1.y = WORLD_HEIGHT - item1.height; item1.vy *= -0.5; }
     }
 
-    // ===== MOVIMENTAÇÃO DOS JOGADORES =====
     for (const id in gameState.players) {
         const player = gameState.players[id];
         const hitboxWidth = player.width * 0.4;
@@ -449,7 +449,6 @@ function updateGameState() {
         }
     }
 
-    // Lógica de infecção
     if (gameState.gamePhase === 'running') {
         const players = gameState.players;
         const playerIds = Object.keys(players);
@@ -563,115 +562,130 @@ io.on('connection', (socket) => {
             }
         }
     });
-    socket.on('playerAction', (actionData) => {
-        const player = gameState.players[socket.id];
-        if (!player) return;
-        if (actionData.type === 'primary_action') {
-            if (player.activeAbility === 'archer' && player.arrowAmmo > 0) {
-                player.arrowAmmo--;
-                gameState.arrows.push({
-                    x: player.x + player.width / 2,
-                    y: player.y + player.height / 2,
-                    width: 10, height: 10, color: 'red',
-                    angle: player.rotation,
-                    ownerId: player.id
-                });
-            }
-        }
-        if (actionData.type === 'ability') {
-            if (player.activeAbility === 'chameleon' && player.camouflageAvailable) {
-                player.isCamouflaged = true;
-                player.camouflageAvailable = false;
-                setTimeout(() => {
-                    if (gameState.players[socket.id]) player.camouflageAvailable = true;
-                }, CAMOUFLAGE_COOLDOWN);
-            }
-            if (player.activeAbility === 'athlete' && player.sprintAvailable) {
-                player.isSprinting = true;
-                player.sprintAvailable = false;
-                const originalSpeed = player.speed;
-                player.speed *= 2;
-                setTimeout(() => {
-                    if (gameState.players[socket.id]) {
-                        player.isSprinting = false;
-                        player.speed = originalSpeed;
-                    }
-                }, SPRINT_DURATION);
-                setTimeout(() => {
-                    if (gameState.players[socket.id]) player.sprintAvailable = true;
-                }, SPRINT_COOLDOWN);
-            }
-            if (player.activeAbility === 'ant' && player.antAvailable) {
-                player.antAvailable = false;
-                player.isAnt = true;
-                const originalWidth = player.width;
-                const originalHeight = player.height;
-                const originalSpeed = player.speed;
-                player.width *= ANT_SIZE_FACTOR;
-                player.height *= ANT_SIZE_FACTOR;
-                player.speed *= ANT_SPEED_FACTOR;
-                setTimeout(() => {
-                    if (gameState.players[socket.id]) {
-                        player.isAnt = false;
-                        player.width = originalWidth;
-                        player.height = originalHeight;
-                        player.speed = originalSpeed;
-                    }
-                }, ANT_TRANSFORMATION_DURATION);
-                setTimeout(() => {
-                    if (gameState.players[socket.id]) player.antAvailable = true;
-                }, ANT_COOLDOWN);
-            }
-            if (player.activeAbility === 'spy' && player.spyUsesLeft > 0 && !player.spyCooldown && !player.isSpying) {
-                player.isSpying = true;
-                player.spyUsesLeft--;
-                player.spyCooldown = true;
-                setTimeout(() => {
-                    if (gameState.players[socket.id]) {
-                        player.isSpying = false;
-                    }
-                }, SPY_DURATION);
-                setTimeout(() => {
-                    if (gameState.players[socket.id]) {
-                        player.spyCooldown = false;
-                    }
-                }, SPY_COOLDOWN);
-            }
-        }
-        if (actionData.type === 'interact') {
-            if (!player.hasSkateboard && gameState.skateboard && gameState.skateboard.spawned && !gameState.skateboard.ownerId) {
-                const skate = gameState.skateboard;
-                const dx = (player.x + player.width / 2) - (skate.x + skate.width / 2);
-                const dy = (player.y + player.height / 2) - (skate.y + skate.height / 2);
-                const distance = Math.sqrt(dx * dx + dy * dy);
+socket.on('playerAction', (actionData) => {
+    const player = gameState.players[socket.id];
+    if (!player) return;
 
-                if (distance < 100) {
-                    player.hasSkateboard = true;
-                    skate.ownerId = player.id;
-                    skate.spawned = false;
-                    return;
+    if (actionData.type === 'primary_action') {
+        if (player.activeAbility === 'archer' && player.arrowAmmo > 0) {
+            player.arrowAmmo--;
+            gameState.arrows.push({
+                x: player.x + player.width / 2,
+                y: player.y + player.height / 2,
+                width: 10, height: 10, color: 'red',
+                angle: player.rotation,
+                ownerId: player.id
+            });
+        }
+    }
+
+    if (actionData.type === 'ability') {
+        if (player.activeAbility === 'chameleon' && player.camouflageAvailable) {
+            player.isCamouflaged = true;
+            player.camouflageAvailable = false;
+            setTimeout(() => {
+                if (gameState.players[socket.id]) player.camouflageAvailable = true;
+            }, CAMOUFLAGE_COOLDOWN);
+        }
+        if (player.activeAbility === 'athlete' && player.sprintAvailable) {
+            player.isSprinting = true;
+            player.sprintAvailable = false;
+            const originalSpeed = player.speed;
+            player.speed *= 2;
+            setTimeout(() => {
+                if (gameState.players[socket.id]) {
+                    player.isSprinting = false;
+                    player.speed = originalSpeed;
+                }
+            }, SPRINT_DURATION);
+            setTimeout(() => {
+                if (gameState.players[socket.id]) player.sprintAvailable = true;
+            }, SPRINT_COOLDOWN);
+        }
+        if (player.activeAbility === 'ant' && player.antAvailable) {
+            player.antAvailable = false;
+            player.isAnt = true;
+            const originalWidth = player.width;
+            const originalHeight = player.height;
+            const originalSpeed = player.speed;
+            player.width *= ANT_SIZE_FACTOR;
+            player.height *= ANT_SIZE_FACTOR;
+            player.speed *= ANT_SPEED_FACTOR;
+            setTimeout(() => {
+                if (gameState.players[socket.id]) {
+                    player.isAnt = false;
+                    player.width = originalWidth;
+                    player.height = originalHeight;
+                    player.speed = originalSpeed;
+                }
+            }, ANT_TRANSFORMATION_DURATION);
+            setTimeout(() => {
+                if (gameState.players[socket.id]) player.antAvailable = true;
+            }, ANT_COOLDOWN);
+        }
+        if (player.activeAbility === 'spy' && player.spyUsesLeft > 0 && !player.spyCooldown && !player.isSpying) {
+            player.isSpying = true;
+            player.spyUsesLeft--;
+            player.spyCooldown = true;
+            setTimeout(() => {
+                if (gameState.players[socket.id]) {
+                    player.isSpying = false;
+                }
+            }, SPY_DURATION);
+            setTimeout(() => {
+                if (gameState.players[socket.id]) {
+                    player.spyCooldown = false;
+                }
+            }, SPY_COOLDOWN);
+        }
+    }
+    
+    if (actionData.type === 'drop_skateboard') {
+        if (player.hasSkateboard) {
+            player.hasSkateboard = false;
+            const skate = gameState.skateboard;
+            skate.spawned = true;
+            skate.ownerId = null;
+            skate.x = player.x;
+            skate.y = player.y;
+        }
+    }
+
+    if (actionData.type === 'interact') {
+        if (!player.hasSkateboard && gameState.skateboard && gameState.skateboard.spawned && !gameState.skateboard.ownerId) {
+            const skate = gameState.skateboard;
+            const dx = (player.x + player.width / 2) - (skate.x + skate.width / 2);
+            const dy = (player.y + player.height / 2) - (skate.y + skate.height / 2);
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < 100) {
+                player.hasSkateboard = true;
+                skate.ownerId = player.id;
+                skate.spawned = false;
+                return;
+            }
+        }
+
+        if (player.activeAbility === 'engineer' && !player.engineerAbilityUsed && !player.isInDuct) {
+            for (let i = 0; i < gameState.ducts.length; i++) {
+                if (isColliding(player.hitbox, gameState.ducts[i])) {
+                    player.isInDuct = true;
+                    player.engineerAbilityUsed = true;
+                    const exitDuct = gameState.ducts[(i + 1) % gameState.ducts.length];
+                    setTimeout(() => {
+                        if (gameState.players[socket.id]) {
+                            player.x = exitDuct.x + exitDuct.width / 2 - player.width / 2;
+                            player.y = exitDuct.y + exitDuct.height / 2 - player.height / 2;
+                            player.isInDuct = false;
+                        }
+                    }, DUCT_TRAVEL_TIME);
+                    break;
                 }
             }
-
-            if (player.activeAbility === 'engineer' && !player.engineerAbilityUsed && !player.isInDuct) {
-                for (let i = 0; i < gameState.ducts.length; i++) {
-                    if (isColliding(player.hitbox, gameState.ducts[i])) {
-                        player.isInDuct = true;
-                        player.engineerAbilityUsed = true;
-                        const exitDuct = gameState.ducts[(i + 1) % gameState.ducts.length];
-                        setTimeout(() => {
-                            if (gameState.players[socket.id]) {
-                                player.x = exitDuct.x + exitDuct.width / 2 - player.width / 2;
-                                player.y = exitDuct.y + exitDuct.height / 2 - player.height / 2;
-                                player.isInDuct = false;
-                            }
-                        }, DUCT_TRAVEL_TIME);
-                        break;
-                    }
-                }
-            }
         }
-    });
+    }
+});
+
     socket.on('sendMessage', (text) => {
         const player = gameState.players[socket.id];
         if (player && text && text.trim().length > 0) {
@@ -689,7 +703,7 @@ io.on('connection', (socket) => {
             if (player.activeAbility !== ' ') {
                 gameState.takenAbilities = gameState.takenAbilities.filter(ability => ability !== player.activeAbility);
             }
-            if (player.hasSkateboard) { // Se o jogador sair com o skate, ele reaparece
+            if (player.hasSkateboard) {
                 spawnSkateboard();
             }
         }
@@ -724,7 +738,7 @@ setInterval(() => {
 
                     if (zombiePlayer.hasSkateboard) {
                         zombiePlayer.hasSkateboard = false;
-                        gameState.skateboard.spawned = true; 
+                        gameState.skateboard.spawned = true;
                         gameState.skateboard.ownerId = null;
                         gameState.skateboard.x = zombiePlayer.x;
                         gameState.skateboard.y = zombiePlayer.y + zombiePlayer.height;
@@ -738,27 +752,42 @@ setInterval(() => {
             }
         }
     }
+
     else if (gameState.gamePhase === 'running') {
         gameState.timeLeft--;
 
         for (const id in gameState.players) {
             const player = gameState.players[id];
             player.coins += 1;
-            if (!player.isAnt) {
-                player.width += GROWTH_AMOUNT;
-                player.height += GROWTH_AMOUNT;
+
+            if (player.role === 'zombie') {
+                if (!player.isAnt && player.width > INITIAL_PLAYER_SIZE) {
+                    player.width -= ZOMBIE_DECAY_AMOUNT;
+                    player.height -= ZOMBIE_DECAY_AMOUNT;
+                }
+            } else {
+                if (!player.isAnt) {
+                    player.width += GROWTH_AMOUNT;
+                    player.height += GROWTH_AMOUNT;
+                }
             }
+
             if (!player.isSprinting && !player.isAnt) {
-                const totalGrowth = player.width - INITIAL_PLAYER_SIZE;
-                let newSpeed = INITIAL_PLAYER_SPEED + (totalGrowth * SPEED_PER_PIXEL_OF_GROWTH);
-                player.speed = Math.min(newSpeed, MAX_PLAYER_SPEED);
+                const sizeDifference = player.width - INITIAL_PLAYER_SIZE;
+                let newSpeed = INITIAL_PLAYER_SPEED + (sizeDifference * SPEED_PER_PIXEL_OF_GROWTH);
+
+                if (player.role === 'zombie') {
+                    player.speed = Math.max(1.5, newSpeed);
+                } else {
+                    player.speed = Math.min(newSpeed, MAX_PLAYER_SPEED);
+                }
             }
         }
 
         if (gameState.timeLeft <= 0) {
             console.log("O tempo acabou! Humanos venceram a rodada.");
             io.emit('newMessage', { name: 'Servidor', text: 'O tempo acabou! Os Humanos sobreviveram!' });
-            
+
             const skateWasOnGround = gameState.skateboard.spawned;
             let skateOwnerId = null;
             for (const id in gameState.players) {
@@ -771,14 +800,14 @@ setInterval(() => {
             const currentPlayers = gameState.players;
             initializeGame();
             gameState.players = currentPlayers;
-            
+
             if (skateWasOnGround || !skateOwnerId) {
                 spawnSkateboard();
             } else {
                 gameState.skateboard.ownerId = skateOwnerId;
                 gameState.skateboard.spawned = false;
             }
-            
+
             for (const id in gameState.players) {
                 const player = gameState.players[id];
                 player.x = WORLD_WIDTH / 2 + 500;
@@ -798,7 +827,7 @@ setInterval(() => {
                 player.arrowAmmo = 0;
                 player.engineerAbilityUsed = false;
                 player.isInDuct = false;
-                
+
                 if (id !== skateOwnerId) {
                     player.hasSkateboard = false;
                 }
