@@ -500,10 +500,10 @@ function drawMenu() {
         ctx.fillStyle = 'grey';
         ctx.fillText(me.inventory.length === 0 ? 'Inventário vazio' : me.inventory.join(', '), canvas.width / 2, canvas.height / 2);
     }
-    ctx.font = '14px Arial';
+    ctx.font = '20px Arial';
     ctx.fillStyle = 'white';
     ctx.textAlign = 'center';
-    ctx.fillText('PRESSIONE "B" PARA FECHAR', canvas.width / 2 + 300, menuY + menuHeight - 20);
+    ctx.fillText('PRESSIONE "B" PARA FECHAR', canvas.width / 2 + 600, menuY + menuHeight - 20);
 }
 
 function isClickInside(pos, rect) {
