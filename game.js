@@ -503,7 +503,7 @@ function drawMenu() {
     ctx.font = '14px Arial';
     ctx.fillStyle = 'white';
     ctx.textAlign = 'center';
-    ctx.fillText('PRESSIONE "B" PARA FECHAR', canvas.width / 2, menuY + menuHeight - 20);
+    ctx.fillText('PRESSIONE "B" PARA FECHAR', canvas.width / 2 + 200, menuY + menuHeight - 20);
 }
 
 function isClickInside(pos, rect) {
