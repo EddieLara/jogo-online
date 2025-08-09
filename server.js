@@ -25,6 +25,8 @@ const ANT_COOLDOWN = 45000;
 const ANT_SIZE_FACTOR = 0.1;
 const ANT_SPEED_FACTOR = 0.7;
 const ARROW_SPEED = 20;
+const ARROW_KNOCKBACK = 30;
+const ARROW_LIFESPAN_AFTER_HIT = 1000;
 const BOX_FRICTION = 0.94;
 const BOX_PUSH_FORCE = 0.15;
 const BOX_COLLISION_DAMPING = 0.80;
@@ -46,6 +48,7 @@ const ABILITY_COSTS = {
     spy: 50
 };
 let gameState = {};
+let nextArrowId = 0;
 
 function spawnSkateboard() {
     if (!gameState.skateboard) return;
@@ -401,58 +404,58 @@ function updateGameState() {
                 break;
             }
         }
-      const playerPoly = { ...player.hitbox, rotation: 0 };
-      for (const item of allCollidables) {
-          const mtv = checkCollisionSAT(playerPoly, item);
-          if (mtv) {
-              if (player.hasSkateboard) {
-                  player.x -= mtv.x;
-                  player.y -= mtv.y;
-                  continue;
-              }
+       const playerPoly = { ...player.hitbox, rotation: 0 };
+       for (const item of allCollidables) {
+            const mtv = checkCollisionSAT(playerPoly, item);
+            if (mtv) {
+                if (player.hasSkateboard) {
+                    player.x -= mtv.x;
+                    player.y -= mtv.y;
+                    continue;
+                }
 
-              player.x -= mtv.x;
-              player.y -= mtv.y;
+                player.x -= mtv.x;
+                player.y -= mtv.y;
 
-              let pushDirectionX = 0;
-              let pushDirectionY = 0;
-              if (player.input.movement.up) { pushDirectionY -= 1; }
-              if (player.input.movement.down) { pushDirectionY += 1; }
-              if (player.input.movement.left) { pushDirectionX -= 1; }
-              if (player.input.movement.right) { pushDirectionX += 1; }
-              
-              const isPushing = Math.sqrt(pushDirectionX * pushDirectionX + pushDirectionY * pushDirectionY) > 0;
+                let pushDirectionX = 0;
+                let pushDirectionY = 0;
+                if (player.input.movement.up) { pushDirectionY -= 1; }
+                if (player.input.movement.down) { pushDirectionY += 1; }
+                if (player.input.movement.left) { pushDirectionX -= 1; }
+                if (player.input.movement.right) { pushDirectionX += 1; }
+                
+                const isPushing = Math.sqrt(pushDirectionX * pushDirectionX + pushDirectionY * pushDirectionY) > 0;
 
-              if (isPushing) {
-                  const contactVectorX = (player.x + player.width / 2) - (item.x + item.width / 2);
-                  const contactVectorY = (player.y + player.height / 2) - (item.y + item.height / 2);
-                  const torque = (contactVectorX * pushDirectionY - contactVectorY * pushDirectionX) * TORQUE_FACTOR;
-                  item.angularVelocity += torque;
-              }
+                if (isPushing) {
+                    const contactVectorX = (player.x + player.width / 2) - (item.x + item.width / 2);
+                    const contactVectorY = (player.y + player.height / 2) - (item.y + item.height / 2);
+                    const torque = (contactVectorX * pushDirectionY - contactVectorY * pushDirectionX) * TORQUE_FACTOR;
+                    item.angularVelocity += torque;
+                }
 
-              const pushForceX = pushDirectionX * BOX_PUSH_FORCE;
-              const pushForceY = pushDirectionY * BOX_PUSH_FORCE;
-              const predictedItem = {
-                  ...item,
-                  x: item.x + item.vx + pushForceX,
-                  y: item.y + item.vy + pushForceY
-              };
+                const pushForceX = pushDirectionX * BOX_PUSH_FORCE;
+                const pushForceY = pushDirectionY * BOX_PUSH_FORCE;
+                const predictedItem = {
+                    ...item,
+                    x: item.x + item.vx + pushForceX,
+                    y: item.y + item.vy + pushForceY
+                };
 
-              let wouldCollideWithWall = false;
-              const staticObstacles = [...gameState.house.walls, ...gameState.garage.walls, gameState.chest];
-              for (const obstacle of staticObstacles) {
-                  if (checkCollisionSAT(predictedItem, obstacle)) {
-                      wouldCollideWithWall = true;
-                      break;
-                  }
-              }
+                let wouldCollideWithWall = false;
+                const staticObstacles = [...gameState.house.walls, ...gameState.garage.walls, gameState.chest];
+                for (const obstacle of staticObstacles) {
+                    if (checkCollisionSAT(predictedItem, obstacle)) {
+                        wouldCollideWithWall = true;
+                        break;
+                    }
+                }
 
-              if (!wouldCollideWithWall && isPushing) {
-                  item.vx += pushForceX;
-                  item.vy += pushForceY;
-              }
-          }
-      }
+                if (!wouldCollideWithWall && isPushing) {
+                    item.vx += pushForceX;
+                    item.vy += pushForceY;
+                }
+            }
+       }
         const allWalls = [...gameState.house.walls, ...gameState.garage.walls];
         for (const wall of allWalls) {
             playerPoly.x = player.x + (player.width - player.hitbox.width) / 2;
@@ -544,13 +547,51 @@ function updateGameState() {
             }
         }
     }
-    gameState.arrows.forEach((arrow, index) => {
+    for (let i = gameState.arrows.length - 1; i >= 0; i--) {
+        const arrow = gameState.arrows[i];
+
+        if (arrow.hasHit) {
+            continue;
+        }
+
         arrow.x += Math.cos(arrow.angle) * ARROW_SPEED;
         arrow.y += Math.sin(arrow.angle) * ARROW_SPEED;
-        if (arrow.x < 0 || arrow.x > WORLD_WIDTH || arrow.y < 0 || arrow.y > WORLD_HEIGHT) {
-            gameState.arrows.splice(index, 1);
+
+        let hitDetected = false;
+
+        for (const playerId in gameState.players) {
+            const player = gameState.players[playerId];
+            if (arrow.ownerId === playerId || !player.hitbox || player.isInDuct) {
+                continue;
+            }
+
+            const arrowHitbox = { x: arrow.x, y: arrow.y, width: arrow.width, height: arrow.height };
+
+            if (isColliding(arrowHitbox, player.hitbox)) {
+                player.x += Math.cos(arrow.angle) * ARROW_KNOCKBACK;
+                player.y += Math.sin(arrow.angle) * ARROW_KNOCKBACK;
+                
+                arrow.hasHit = true;
+                hitDetected = true;
+
+                const arrowIdToRemove = arrow.id;
+                setTimeout(() => {
+                    const index = gameState.arrows.findIndex(a => a.id === arrowIdToRemove);
+                    if (index !== -1) {
+                        gameState.arrows.splice(index, 1);
+                    }
+                }, ARROW_LIFESPAN_AFTER_HIT);
+
+                break;
+            }
         }
-    });
+
+        if (!hitDetected) {
+            if (arrow.x < 0 || arrow.x > WORLD_WIDTH || arrow.y < 0 || arrow.y > WORLD_HEIGHT) {
+                gameState.arrows.splice(i, 1);
+            }
+        }
+    }
 }
 
 io.on('connection', (socket) => {
@@ -586,11 +627,13 @@ socket.on('playerAction', (actionData) => {
         if (player.activeAbility === 'archer' && player.arrowAmmo > 0) {
             player.arrowAmmo--;
             gameState.arrows.push({
+                id: nextArrowId++,
                 x: player.x + player.width / 2,
                 y: player.y + player.height / 2,
                 width: 10, height: 10, color: 'red',
                 angle: player.rotation,
-                ownerId: player.id
+                ownerId: player.id,
+                hasHit: false
             });
         }
     }
