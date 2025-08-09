@@ -75,6 +75,7 @@ function initializeGame() {
             ownerId: null
         },
         box: [
+            // Caixas Originais
             { x: 1000, y: 1500, width: 128, height: 128, vx: 0, vy: 0, rotation: 100, angularVelocity: 0 },
             { x: 2720, y: 1670, width: 128, height: 128, vx: 0, vy: 0, rotation: 200, angularVelocity: 0 },
             { x: 1050, y: 600, width: 128, height: 128, vx: 0, vy: 0, rotation: 120, angularVelocity: 0 },
@@ -85,14 +86,24 @@ function initializeGame() {
             { x: 2680, y: 290, width: 90, height: 90, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
             { x: 1400, y: 800, width: 56, height: 56, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
             { x: 1456, y: 800, width: 100, height: 100, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
-            { x: 1556, y: 800, width: 80, height: 80, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 }
+            { x: 1556, y: 800, width: 80, height: 80, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
+            // --- Novas Caixas Adicionadas ---
+            { x: 800, y: 300, width: 90, height: 90, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
+            { x: 1700, y: 700, width: 128, height: 128, vx: 0, vy: 0, rotation: 45, angularVelocity: 0 },
+            { x: 2300, y: 900, width: 80, height: 80, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
+            { x: 450, y: 950, width: 100, height: 100, vx: 0, vy: 0, rotation: 15, angularVelocity: 0 }
         ],
         furniture: [
+            // Móveis Originais
             { id: 'small_bed', x: 300, y: 400, width: 108, height: 200, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
             { id: 'small_bed', x: 1850, y: 400, width: 108, height: 200, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
             { id: 'small_table', x: 2500, y: 600, width: 288, height: 132, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
             { id: 'big_table', x: 500, y: 1400, width: 480, height: 240, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
-            { id: 'car', x: 3150, y: 150, width: 502, height: 302, vx: 0, vy: 0, rotation: 180, angularVelocity: 0 }
+            { id: 'car', x: 3150, y: 150, width: 502, height: 302, vx: 0, vy: 0, rotation: 180, angularVelocity: 0 },
+            // --- Novos Móveis Adicionados ---
+            { id: 'small_bed', x: 1000, y: 400, width: 108, height: 200, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
+            { id: 'small_table', x: 2100, y: 1400, width: 288, height: 132, vx: 0, vy: 0, rotation: 90, angularVelocity: 0 },
+            { id: 'small_table', x: 850, y: 900, width: 288, height: 132, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 }
         ],
         chest: { x: 2890, y: 825, width: 200, height: 240 },
         ducts: [
@@ -110,6 +121,7 @@ function initializeGame() {
     buildWalls(gameState.house);
     buildWalls(gameState.garage);
 }
+
 function buildWalls(structure) {
     const s = structure;
     const wt = s.wallThickness;
@@ -480,8 +492,8 @@ function updateGameState() {
                         }
                         player2.role = 'zombie';
                         player2.speed *= ZOMBIE_SPEED_BOOST;
-                        console.log(`${player2.name} foi infectado!`);
-                        io.emit('newMessage', { name: 'Servidor', text: `${player2.name} foi infectado!` });
+                        console.log(`${player2.name} has been infected!`);
+                        io.emit('newMessage', { name: 'Server', text: `${player2.name} has been infected!` });
                     }
                 }
             }
@@ -493,8 +505,8 @@ function updateGameState() {
                 }
             }
             if (humanCount === 0 && playerIds.length > 0) {
-                console.log("Todos os humanos foram infectados! Reiniciando a partida.");
-                io.emit('newMessage', { name: 'Servidor', text: 'Os Zumbis venceram!' });
+                console.log("All humans have been infected! Restarting the round.");
+                io.emit('newMessage', { name: 'Server', text: 'The Zombies have won!' });
 
                 const skateWasOnGround = gameState.skateboard.spawned;
                 let skateOwnerId = null;
@@ -542,7 +554,7 @@ function updateGameState() {
 }
 
 io.on('connection', (socket) => {
-    console.log('Novo jogador conectado:', socket.id);
+    console.log('New player connected:', socket.id);
     createNewPlayer(socket);
     socket.on('playerInput', (inputData) => {
         const player = gameState.players[socket.id];
@@ -701,7 +713,7 @@ socket.on('playerAction', (actionData) => {
         }
     });
     socket.on('disconnect', () => {
-        console.log('Jogador desconectado:', socket.id);
+        console.log('Player disconnected:', socket.id);
         const player = gameState.players[socket.id];
         if (player) {
             if (player.activeAbility !== ' ') {
@@ -750,8 +762,8 @@ setInterval(() => {
 
                     zombiePlayer.role = 'zombie';
                     zombiePlayer.speed *= ZOMBIE_SPEED_BOOST;
-                    console.log(`A rodada começou! ${zombiePlayer.name} é o Zumbi inicial!`);
-                    io.emit('newMessage', { name: 'Servidor', text: `A infecção começou! ${zombiePlayer.name} é o zumbi!` });
+                    console.log(`The round has started! ${zombiePlayer.name} is the initial Zombie!`);
+                    io.emit('newMessage', { name: 'Server', text: `The infection has begun! ${zombiePlayer.name} is the zombie!` });
                 }
             }
         }
@@ -789,8 +801,8 @@ setInterval(() => {
         }
 
         if (gameState.timeLeft <= 0) {
-            console.log("O tempo acabou! Humanos venceram a rodada.");
-            io.emit('newMessage', { name: 'Servidor', text: 'O tempo acabou! Os Humanos sobreviveram!' });
+            console.log("Time's up! Humans won the round.");
+            io.emit('newMessage', { name: 'Server', text: "Time's up! The Humans survived!" });
 
             const skateWasOnGround = gameState.skateboard.spawned;
             let skateOwnerId = null;
@@ -843,5 +855,5 @@ setInterval(() => {
 server.listen(PORT, () => {
     initializeGame();
     spawnSkateboard();
-    console.log(`🚀 Servidor do jogo rodando em http://localhost:${PORT}`);
+    console.log(`🚀 Game server running at http://localhost:${PORT}`);
 });

@@ -61,7 +61,7 @@ let gameState = { players: {}, arrows: [], timeLeft: 120, startTime: 60, gamePha
 const movement = { up: false, down: false, left: false, right: false };
 let mouse = { x: 0, y: 0 };
 let isMenuOpen = false;
-let activeMenuTab = 'items';
+let activeMenuTab = 'abilities';
 const chatInput = document.getElementById('chatInput');
 let isChatting = false;
 let chatMessages = [];
@@ -135,44 +135,38 @@ canvas.addEventListener('mousemove', function (event) {
 });
 canvas.addEventListener('mousedown', function (event) {
     if (isMenuOpen) {
-        const functionsTabBtn = getFunctionsTabRect();
+        const me = gameState.players[myId];
+        if (!me) return;
+
+        const abilitiesTabBtn = getAbilitiesTabRect();
         const itemsTabBtn = getItemsTabRect();
-        if (isClickInside(mouse, functionsTabBtn)) {
-            activeMenuTab = 'functions';
+        if (isClickInside(mouse, abilitiesTabBtn)) {
+            activeMenuTab = 'abilities';
             return;
         }
         if (isClickInside(mouse, itemsTabBtn)) {
             activeMenuTab = 'items';
             return;
         }
-        if (activeMenuTab === 'functions') {
-            const chameleonBtn = getChameleonButtonRect();
-            const athleteBtn = getAthleteButtonRect();
-            const archerBtn = getArcherButtonRect();
-            const engineerBtn = getEngineerButtonRect();
-            const antBtn = getAntButtonRect();
-            const spyBtn = getSpyButtonRect();
-            if (isClickInside(mouse, chameleonBtn) && !gameState.takenAbilities.includes('chameleon')) {
-                socket.emit('chooseAbility', 'chameleon');
-            } else if (isClickInside(mouse, athleteBtn) && !gameState.takenAbilities.includes('athlete')) {
-                socket.emit('chooseAbility', 'athlete');
-            } else if (isClickInside(mouse, archerBtn) && !gameState.takenAbilities.includes('archer')) {
-                socket.emit('chooseAbility', 'archer');
-            } else if (isClickInside(mouse, engineerBtn) && !gameState.takenAbilities.includes('engineer')) {
-                socket.emit('chooseAbility', 'engineer');
-            } else if (isClickInside(mouse, antBtn) && !gameState.takenAbilities.includes('ant')) {
-                socket.emit('chooseAbility', 'ant');
-            } else if (isClickInside(mouse, spyBtn) && !gameState.takenAbilities.includes('spy')) {
-                socket.emit('chooseAbility', 'spy');
-            } else {
-                return;
+
+        if (activeMenuTab === 'abilities' && me.activeAbility === ' ') {
+            const abilities = getAbilitiesLayout().buttons;
+            for (const btn of abilities) {
+                const cost = gameState.abilityCosts[btn.ability] || 0;
+                const canAfford = me.coins >= cost;
+                const isTaken = gameState.takenAbilities.includes(btn.ability);
+                if (isClickInside(mouse, btn.rect) && !isTaken && canAfford) {
+                    socket.emit('chooseAbility', btn.ability);
+                    isMenuOpen = false;
+                    return;
+                }
             }
-            isMenuOpen = false;
         }
     } else {
         socket.emit('playerAction', { type: 'primary_action' });
     }
 });
+
 function draw() {
     if (!myId || !gameState.players || !gameState.players[myId]) {
         ctx.fillStyle = 'black';
@@ -180,7 +174,7 @@ function draw() {
         ctx.fillStyle = 'white';
         ctx.textAlign = 'center';
         ctx.font = '30px Arial';
-        ctx.fillText('Aguardando estado do jogo...', canvas.width / 2, canvas.height / 2);
+        ctx.fillText('Waiting for game state...', canvas.width / 2, canvas.height / 2);
         return;
     }
     const me = gameState.players[myId];
@@ -273,8 +267,9 @@ function draw() {
             ctx.drawImage(human, -player.width / 2, -player.height / 2, player.width, player.height);
         }
         ctx.restore();
-        if (!player.isAnt && !player.isCamouflaged && !player.isHidden && !player.isSpying) {
-            ctx.fillStyle = player.role === 'zombie' ? '#2ecc71' : 'white';
+        
+        if (!player.isAnt && !player.isCamouflaged && !player.isHidden) {
+            ctx.fillStyle = (player.role === 'zombie' || player.isSpying) ? '#2ecc71' : 'white';
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 5;
             ctx.textAlign = 'center';
@@ -298,7 +293,7 @@ function draw() {
         const seconds = gameState.startTime % 60;
         ctx.fillText(`0:${String(seconds).padStart(2, '0')}`, canvas.width / 2, 80);
         ctx.font = '30px Arial';
-        ctx.fillText('A rodada começa em...', canvas.width / 2, 40);
+        ctx.fillText('The round starts in...', canvas.width / 2, 40);
     } else {
         const minutes = Math.floor(gameState.timeLeft / 60);
         const seconds = gameState.timeLeft % 60;
@@ -306,11 +301,11 @@ function draw() {
         if (me.role === 'zombie') {
             ctx.font = '30px Arial';
             ctx.fillStyle = '#2ecc71';
-            ctx.fillText('INFECTE OS HUMANOS!', canvas.width / 2, 90);
+            ctx.fillText('INFECT THE HUMANS!', canvas.width / 2, 90);
         } else {
             ctx.font = '30px Arial';
             ctx.fillStyle = 'cyan';
-            ctx.fillText('SOBREVIVA!', canvas.width / 2, 90);
+            ctx.fillText('SURVIVE!', canvas.width / 2, 90);
         }
     }
     ctx.font = '30px Arial';
@@ -319,64 +314,64 @@ function draw() {
     ctx.fillText(`🪙 ${me.coins}`, canvas.width - 20, 50);
     ctx.textAlign = 'right';
     ctx.fillStyle = 'white';
-    ctx.fillText(`VELOCIDADE: ${me.speed.toFixed(2)}`, canvas.width - 20, canvas.height - 10);
+    ctx.fillText(`SPEED: ${me.speed.toFixed(2)}`, canvas.width - 20, canvas.height - 10);
     ctx.textAlign = 'left';
-    ctx.fillText(`HABILIDADE: ${me.activeAbility.toUpperCase()}`, 10, canvas.height - 10);
+    ctx.fillText(`ABILITY: ${me.activeAbility.toUpperCase()}`, 10, canvas.height - 10);
     if (me.activeAbility === 'archer') {
-        ctx.fillText(`MUNIÇÃO: ${me.arrowAmmo}`, 10, canvas.height - 50);
+        ctx.fillText(`AMMO: ${me.arrowAmmo}`, 10, canvas.height - 50);
     }
     if (me.activeAbility === 'engineer') {
         ctx.font = '24px Arial';
-        const statusText = me.engineerAbilityUsed ? 'USADO' : 'DISPONÍVEL';
+        const statusText = me.engineerAbilityUsed ? 'USED' : 'AVAILABLE';
         ctx.fillStyle = me.engineerAbilityUsed ? 'red' : 'lightgreen';
-        ctx.fillText(`DUTOS: ${statusText}`, 10, canvas.height - 50);
+        ctx.fillText(`DUCTS: ${statusText}`, 10, canvas.height - 50);
     }
     if (me.activeAbility === 'athlete') {
         ctx.font = '24px Arial';
         ctx.fillStyle = me.sprintAvailable ? 'lightgreen' : 'red';
-        ctx.fillText(`SPRINT: ${me.sprintAvailable ? 'PRONTO' : 'RECARREGANDO'}`, 10, canvas.height - 50);
+        ctx.fillText(`SPRINT: ${me.sprintAvailable ? 'READY' : 'RECHARGING'}`, 10, canvas.height - 50);
     }
     if (me.activeAbility === 'chameleon') {
         ctx.font = '24px Arial';
         ctx.fillStyle = me.camouflageAvailable ? 'lightgreen' : 'red';
-        ctx.fillText(`CAMUFLAGEM: ${me.camouflageAvailable ? 'PRONTO' : 'RECARREGANDO'}`, 10, canvas.height - 50);
+        ctx.fillText(`CAMOUFLAGE: ${me.camouflageAvailable ? 'READY' : 'RECHARGING'}`, 10, canvas.height - 50);
     }
     if (me.activeAbility === 'ant') {
         ctx.font = '24px Arial';
         let statusText;
         if (me.isAnt) {
-            statusText = 'ATIVO';
+            statusText = 'ACTIVE';
             ctx.fillStyle = 'yellow';
         } else if (me.antAvailable) {
-            statusText = 'PRONTO';
+            statusText = 'READY';
             ctx.fillStyle = 'lightgreen';
         } else {
-            statusText = 'RECARREGANDO';
+            statusText = 'RECHARGING';
             ctx.fillStyle = 'red';
         }
-        ctx.fillText(`FORMIGA: ${statusText}`, 10, canvas.height - 50);
+        ctx.fillText(`ANT: ${statusText}`, 10, canvas.height - 50);
     }
     if (me.activeAbility === 'spy') {
         ctx.font = '24px Arial';
         let statusText;
         if (me.isSpying) {
-            statusText = 'ATIVO';
+            statusText = 'ACTIVE';
             ctx.fillStyle = 'yellow';
         } else if (me.spyUsesLeft > 0 && !me.spyCooldown) {
-            statusText = 'PRONTO';
+            statusText = 'READY';
             ctx.fillStyle = 'lightgreen';
         } else {
-            statusText = 'RECARREGANDO';
+            statusText = 'RECHARGING';
             ctx.fillStyle = 'red';
         }
         if (me.spyUsesLeft === 0 && !me.isSpying) {
-            statusText = 'SEM USOS';
+            statusText = 'NO USES';
             ctx.fillStyle = 'darkred';
         }
-        ctx.fillText(`ESPIONAGEM: ${statusText}`, 10, canvas.height - 50);
+        ctx.fillText(`SPYING: ${statusText}`, 10, canvas.height - 50);
         ctx.font = '20px Arial';
         ctx.fillStyle = 'white';
-        ctx.fillText(`USOS RESTANTES: ${me.spyUsesLeft}`, 10, canvas.height - 80);
+        ctx.fillText(`USES LEFT: ${me.spyUsesLeft}`, 10, canvas.height - 80);
     }
     drawChat();
     if (isMenuOpen) {
@@ -396,8 +391,7 @@ function drawChat() {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     chatMessages.forEach((msg, index) => {
-        const fullMessage = `${msg.name}: ${msg.text}`;
-        ctx.fillStyle = msg.name === 'Servidor' ? 'yellow' : 'gold';
+        ctx.fillStyle = msg.name === 'Server' ? 'yellow' : 'gold';
         ctx.fillText(msg.name + ':', chatBoxX + 10, chatBoxY + 5 + (index * 25));
         ctx.fillStyle = 'white';
         const nameWidth = ctx.measureText(msg.name + ': ').width;
@@ -405,6 +399,44 @@ function drawChat() {
     });
     ctx.restore();
 }
+
+function getAbilitiesLayout() {
+    const abilities = [
+        { text: 'CHAMELEON', ability: 'chameleon', description: 'Turn into a box to hide.' },
+        { text: 'ATHLETE', ability: 'athlete', description: 'Sprint for a short duration.' },
+        { text: 'ARCHER', ability: 'archer', description: 'Shoot arrows to slow enemies.' },
+        { text: 'ENGINEER', ability: 'engineer', description: 'Travel instantly between ducts.' },
+        { text: 'ANT', ability: 'ant', description: 'Shrink to a tiny size.' },
+        { text: 'SPY', ability: 'spy', description: 'Disguise as a zombie.' }
+    ];
+
+    const menuWidth = 1500, menuHeight = 900;
+    const menuX = (canvas.width - menuWidth) / 2, menuY = (canvas.height - menuHeight) / 2;
+
+    const cols = 3;
+    const btnWidth = 400;
+    const btnHeight = 150;
+    const gap = 50;
+    const totalGridWidth = cols * btnWidth + (cols - 1) * gap;
+    const startX = menuX + (menuWidth - totalGridWidth) / 2;
+    const startY = menuY + 220;
+
+    const buttons = abilities.map((ability, index) => {
+        const row = Math.floor(index / cols);
+        const col = index % cols;
+        return {
+            ...ability,
+            rect: {
+                x: startX + col * (btnWidth + gap),
+                y: startY + row * (btnHeight + gap),
+                width: btnWidth,
+                height: btnHeight
+            }
+        };
+    });
+    return { buttons };
+}
+
 function drawMenu() {
     const me = gameState.players[myId];
     if (!me) return;
@@ -415,62 +447,73 @@ function drawMenu() {
     ctx.strokeStyle = '#000000ff';
     ctx.lineWidth = 5;
     ctx.strokeRect(menuX, menuY, menuWidth, menuHeight);
-    const functionsTabBtn = getFunctionsTabRect();
+    const abilitiesTabBtn = getAbilitiesTabRect();
     const itemsTabBtn = getItemsTabRect();
-    ctx.fillStyle = activeMenuTab === 'functions' ? '#000000ff' : '#444';
-    ctx.fillRect(functionsTabBtn.x, functionsTabBtn.y, functionsTabBtn.width, functionsTabBtn.height);
+    ctx.fillStyle = activeMenuTab === 'abilities' ? '#000000ff' : '#444';
+    ctx.fillRect(abilitiesTabBtn.x, abilitiesTabBtn.y, abilitiesTabBtn.width, abilitiesTabBtn.height);
     ctx.fillStyle = activeMenuTab === 'items' ? '#000000ff' : '#444';
     ctx.fillRect(itemsTabBtn.x, itemsTabBtn.y, itemsTabBtn.width, itemsTabBtn.height);
     ctx.fillStyle = 'white';
     ctx.font = '30px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('HABILIDADES', functionsTabBtn.x + functionsTabBtn.width / 2, functionsTabBtn.y + 40);
-    ctx.fillText('ITENS', itemsTabBtn.x + itemsTabBtn.width / 2, itemsTabBtn.y + 40);
-    if (activeMenuTab === 'functions') {
+    ctx.fillText('ABILITIES', abilitiesTabBtn.x + abilitiesTabBtn.width / 2, abilitiesTabBtn.y + 40);
+    ctx.fillText('ITEMS', itemsTabBtn.x + itemsTabBtn.width / 2, itemsTabBtn.y + 40);
+
+    if (activeMenuTab === 'abilities') {
         ctx.font = '50px Arial';
-        ctx.fillText('ESCOLHA UMA HABILIDADE', canvas.width / 2, menuY + 140);
+        ctx.fillText('CHOOSE AN ABILITY', canvas.width / 2, menuY + 140);
         if (me.activeAbility === ' ') {
-            const buttons = [
-                { text: 'CAMALEÃO', ability: 'chameleon', rect: getChameleonButtonRect() },
-                { text: 'ATLETA', ability: 'athlete', rect: getAthleteButtonRect() },
-                { text: 'ARQUEIRO', ability: 'archer', rect: getArcherButtonRect() },
-                { text: 'ENGENHEIRO', ability: 'engineer', rect: getEngineerButtonRect() },
-                { text: 'FORMIGA', ability: 'ant', rect: getAntButtonRect() },
-                { text: 'ESPIÃO', ability: 'spy', rect: getSpyButtonRect() }
-            ];
+            const { buttons } = getAbilitiesLayout();
             buttons.forEach(btn => {
                 const isTaken = gameState.takenAbilities.includes(btn.ability);
                 const cost = gameState.abilityCosts[btn.ability] || 0;
                 const canAfford = me.coins >= cost;
-                ctx.fillStyle = isTaken ? '#888' : (canAfford ? 'white' : 'white');
-                ctx.strokeStyle = isTaken ? '#555' : (canAfford ? 'white' : 'white');
+                ctx.fillStyle = isTaken ? '#333' : (canAfford ? '#282828' : '#1a1a1a');
+                ctx.fillRect(btn.rect.x, btn.rect.y, btn.rect.width, btn.rect.height);
+                ctx.strokeStyle = isTaken ? '#555' : (canAfford ? 'white' : '#666');
                 ctx.lineWidth = 3;
-                ctx.strokeRect(btn.rect.x - 10, btn.rect.y - 10, btn.rect.width + 10, btn.rect.height + 10);
-                ctx.font = '40px Arial';
+                ctx.strokeRect(btn.rect.x, btn.rect.y, btn.rect.width, btn.rect.height);
+
                 ctx.textAlign = 'center';
-                const buttonText = isTaken ? `${btn.text}` : btn.text;
-                ctx.fillText(buttonText, btn.rect.x + btn.rect.width / 2, btn.rect.y + 35);
+                ctx.font = '40px Arial';
+                ctx.fillStyle = isTaken ? '#888' : (canAfford ? 'white' : '#999');
+                ctx.fillText(btn.text, btn.rect.x + btn.rect.width / 2, btn.rect.y + 45);
+
+                ctx.font = '20px Arial';
+                ctx.fillStyle = isTaken ? '#777' : (canAfford ? '#ccc' : '#888');
+                ctx.fillText(btn.description, btn.rect.x + btn.rect.width / 2, btn.rect.y + 80);
+
                 ctx.font = '30px Arial';
-                ctx.textAlign = 'left';
                 ctx.fillStyle = canAfford ? 'gold' : 'red';
-                ctx.fillText(`🪙 ${cost}`, btn.rect.x + btn.rect.width + 30, btn.rect.y + 35);
+                const costText = `🪙 ${cost}`;
+                ctx.textAlign = 'right';
+                ctx.fillText(costText, btn.rect.x + btn.rect.width - 20, btn.rect.y + btn.rect.height - 15);
+                
+                if (isTaken) {
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+                    ctx.textAlign = 'center';
+                    ctx.font = 'bold 30px Arial';
+                    ctx.fillText('TAKEN', btn.rect.x + btn.rect.width / 2, btn.rect.y + 115);
+                }
             });
         } else {
             ctx.font = '40px Arial';
             ctx.fillStyle = 'grey';
-            ctx.fillText('HABILIDADE JÁ ESCOLHIDA!', canvas.width / 2, canvas.height / 2);
+            ctx.textAlign = 'center';
+            ctx.fillText('ABILITY ALREADY CHOSEN!', canvas.width / 2, canvas.height / 2);
         }
     } else if (activeMenuTab === 'items') {
         ctx.font = '50px Arial';
-        ctx.fillText('LOJA', canvas.width / 2, menuY + 140);
+        ctx.textAlign = 'center';
+        ctx.fillText('SHOP', canvas.width / 2, menuY + 140);
         ctx.font = '30px Arial';
         ctx.fillStyle = 'grey';
-        ctx.fillText(me.inventory.length === 0 ? 'Inventário vazio' : me.inventory.join(', '), canvas.width / 2, canvas.height / 2);
+        ctx.fillText(me.inventory.length === 0 ? 'Inventory empty' : me.inventory.join(', '), canvas.width / 2, canvas.height / 2);
     }
     ctx.font = '20px Arial';
     ctx.fillStyle = 'white';
     ctx.textAlign = 'center';
-    ctx.fillText('PRESSIONE "B" PARA FECHAR', canvas.width / 2 + 580, menuY + menuHeight - 20);
+    ctx.fillText('PRESS "B" TO CLOSE', canvas.width / 2 + 580, menuY + menuHeight - 20);
 }
 function isClickInside(pos, rect) {
     return pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height;
@@ -483,7 +526,7 @@ function getPlayerAngle(player) {
     const dy = mouse.y - cy;
     return Math.atan2(dy, dx);
 }
-function getFunctionsTabRect() {
+function getAbilitiesTabRect() {
     const mX = (canvas.width - 1500) / 2;
     const mY = (canvas.height - 900) / 2;
     return { x: mX + 10, y: mY + 10, width: 200, height: 60 };
@@ -493,30 +536,7 @@ function getItemsTabRect() {
     const mY = (canvas.height - 900) / 2;
     return { x: mX + 220, y: mY + 10, width: 200, height: 60 };
 }
-function getChameleonButtonRect() {
-    const mY = (canvas.height - 400) / 2;
-    return { x: canvas.width / 2 - 150, y: mY + 200, width: 300, height: 50 };
-}
-function getAthleteButtonRect() {
-    const mY = (canvas.height - 400) / 2;
-    return { x: canvas.width / 2 - 150, y: mY + 275, width: 300, height: 50 };
-}
-function getArcherButtonRect() {
-    const mY = (canvas.height - 400) / 2;
-    return { x: canvas.width / 2 - 150, y: mY + 350, width: 300, height: 50 };
-}
-function getEngineerButtonRect() {
-    const mY = (canvas.height - 400) / 2;
-    return { x: canvas.width / 2 - 150, y: mY + 425, width: 300, height: 50 };
-}
-function getAntButtonRect() {
-    const mY = (canvas.height - 400) / 2;
-    return { x: canvas.width / 2 - 150, y: mY + 500, width: 300, height: 50 };
-}
-function getSpyButtonRect() {
-    const mY = (canvas.height - 400) / 2;
-    return { x: canvas.width / 2 - 150, y: mY + 575, width: 300, height: 50 };
-}
+
 function gameLoop() {
     if (myId && gameState.players[myId]) {
         const me = gameState.players[myId];
