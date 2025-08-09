@@ -260,7 +260,7 @@ function getSpyButtonRect() {
     return { x: canvas.width / 2 - 150, y: mY + 575, width: 300, height: 50 };
 }
 
-// --------- Ranking (PÓDIGO) ---------
+// --------- Ranking (PÓDIO) ---------
 function drawPodiumRanking() {
     // ranking: top 10 jogadores online, por moedas (coins)
     let sorted = Object.values(gameState.players)
