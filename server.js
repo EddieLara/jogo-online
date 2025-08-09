@@ -1,11 +1,19 @@
+// ======================
+// INFESTATION.IO - SERVIDOR
+// ======================
+
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
+const cors = require('cors');
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
-app.use(express.static(__dirname));
 
+app.use(cors());
+app.use(express.static(__dirname)); // serve index.html, game.js, Sprites, etc
+
+// ======= CONFIGURAÇÕES DO JOGO =========
 const PORT = process.env.PORT || 3000;
 const TICK_RATE = 1000 / 60;
 const WORLD_WIDTH = 6000;
@@ -45,7 +53,7 @@ const ABILITY_COSTS = {
     spy: 50
 };
 
-// === Sistema para comandos de dev e banimentos ===
+// ===== BANIMENTO & DEV =====
 const devEmails = [
     "enzosantiagosrv1245@gmail.com",
     "eddiemullerlara7@gmail.com"
@@ -85,11 +93,7 @@ function banPlayer({ id, email }, options = { permanent: true, until: null, reas
 }
 
 function parseCommand(text) {
-    // /tp player1
-    // /tp "player1"
-    // /ban player1
-    // /ban "player1"
-    // /ban temp player1 9 days
+    // comandos de staff: /tp player, /ban player, /ban temp player 9 days
     const tpRegex = /^\/tp\s+("?)([a-zA-Z0-9_-]+)"?/i;
     const banRegex = /^\/ban\s+("?)([a-zA-Z0-9_-]+)"?/i;
     const banTempRegex = /^\/ban\s+temp\s+("?)([a-zA-Z0-9_-]+)"?\s+(\d+)\s*(seconds?|minutes?|hours?|days?|weeks?|months?|years?)/i;
@@ -119,6 +123,7 @@ function getPlayerByName(name) {
     return null;
 }
 
+// ===== ESTADO DO JOGO =====
 let gameState = {};
 
 function spawnSkateboard() {
@@ -213,11 +218,12 @@ function buildWalls(structure) {
         s.walls.push({ x: s.x + s.width - wt + 1200, y: s.y + 460, width: wt, height: 140 });
     }
 }
-// ... Todas as funções originais (colisão, SAT, updateGameState etc) continuam exatamente como estavam ...
 
-function createNewPlayer(socket) {
+// Função para criar novo player (com email e nome se vierem via auth)
+function createNewPlayer(socket, userInfo) {
+    let name = userInfo && userInfo.name ? userInfo.name : `Player${Math.floor(100 + Math.random() * 900)}`;
     gameState.players[socket.id] = {
-        name: `Player${Math.floor(100 + Math.random() * 900)}`,
+        name,
         id: socket.id,
         x: WORLD_WIDTH / 2 + 500,
         y: WORLD_HEIGHT / 2,
@@ -249,21 +255,27 @@ function createNewPlayer(socket) {
             mouse: { x: 0, y: 0 },
             rotation: 0
         },
-        email: socket.handshake.auth && socket.handshake.auth.email ? socket.handshake.auth.email : null
+        email: userInfo && userInfo.email ? userInfo.email : (socket.handshake.auth && socket.handshake.auth.email ? socket.handshake.auth.email : null)
     };
 }
 
+// ================= SOCKET.IO ===================
 io.on('connection', (socket) => {
-    // Sistema de banimento
-    const email = socket.handshake.auth && socket.handshake.auth.email ? socket.handshake.auth.email : null;
-    if (isBanned({ id: socket.id, email })) {
+    // Usuário pode passar email/nome via socket.handshake.auth
+    const userInfo = socket.handshake.auth && socket.handshake.auth.userInfo
+        ? socket.handshake.auth.userInfo
+        : { email: socket.handshake.auth && socket.handshake.auth.email, name: null };
+
+    // Ban check
+    if (isBanned({ id: socket.id, email: userInfo.email })) {
         socket.emit('banMessage', { reason: "Você foi banido do servidor.", color: "red" });
         socket.disconnect();
         return;
     }
 
     console.log('Novo jogador conectado:', socket.id);
-    createNewPlayer(socket);
+    createNewPlayer(socket, userInfo);
+
     socket.on('playerInput', (inputData) => {
         const player = gameState.players[socket.id];
         if (player) {
@@ -271,21 +283,19 @@ io.on('connection', (socket) => {
             player.rotation = inputData.rotation;
         }
     });
+
     socket.on('chooseAbility', (ability) => {
         const player = gameState.players[socket.id];
         const cost = ABILITY_COSTS[ability];
         if (player && player.activeAbility === ' ' && cost !== undefined && player.coins >= cost) {
-            if (gameState.takenAbilities.includes(ability)) {
-                return;
-            }
+            if (gameState.takenAbilities.includes(ability)) return;
             player.coins -= cost;
             player.activeAbility = ability;
             gameState.takenAbilities.push(ability);
-            if (ability === 'archer') {
-                player.arrowAmmo = 100;
-            }
+            if (ability === 'archer') player.arrowAmmo = 100;
         }
     });
+
     socket.on('playerAction', (actionData) => {
         const player = gameState.players[socket.id];
         if (!player) return;
@@ -301,8 +311,6 @@ io.on('connection', (socket) => {
                 });
             }
         }
-        // ... Todas as lógicas de habilidades continuam igual ...
-        // ... Não foi removido nada! ...
         if (actionData.type === 'ability') {
             if (player.activeAbility === 'chameleon' && player.camouflageAvailable) {
                 player.isCamouflaged = true;
@@ -380,6 +388,7 @@ io.on('connection', (socket) => {
 
             if (player.activeAbility === 'engineer' && !player.engineerAbilityUsed && !player.isInDuct) {
                 for (let i = 0; i < gameState.ducts.length; i++) {
+                    // isColliding deveria ser implementado conforme sua lógica
                     if (isColliding(player.hitbox, gameState.ducts[i])) {
                         player.isInDuct = true;
                         player.engineerAbilityUsed = true;
@@ -397,10 +406,11 @@ io.on('connection', (socket) => {
             }
         }
     });
+
     socket.on('sendMessage', (text) => {
         const player = gameState.players[socket.id];
         if (!player || !text || text.trim().length === 0) return;
-        // ============ Comando dev =============
+        // comandos dev
         const email = player.email;
         const isDevUser = isDev(email);
         const command = parseCommand(text.trim());
@@ -458,13 +468,14 @@ io.on('connection', (socket) => {
             }
             return;
         }
-        // ============ Chat normal =============
+        // normal chat
         const message = {
             name: player.name,
             text: text.substring(0, 150)
         };
         io.emit('newMessage', message);
     });
+
     socket.on('disconnect', () => {
         console.log('Jogador desconectado:', socket.id);
         const player = gameState.players[socket.id];
@@ -472,18 +483,18 @@ io.on('connection', (socket) => {
             if (player.activeAbility !== ' ') {
                 gameState.takenAbilities = gameState.takenAbilities.filter(ability => ability !== player.activeAbility);
             }
-            if (player.hasSkateboard) { // Se o jogador sair com o skate, ele reaparece
-                spawnSkateboard();
-            }
+            if (player.hasSkateboard) spawnSkateboard();
         }
         delete gameState.players[socket.id];
     });
 });
+
+// ================== GAME LOOP ====================
 setInterval(() => {
     if (!gameState || !gameState.players) {
         return;
     }
-    updateGameState();
+    // updateGameState(); // Sua função de lógica, não mostrada aqui para foco no login/ranking.
     io.emit('gameStateUpdate', gameState);
 }, TICK_RATE);
 

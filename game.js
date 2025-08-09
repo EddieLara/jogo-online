@@ -1,13 +1,108 @@
+// ============ GAME CLIENT =============
+
+// --------- Login & Google Auth ---------
+let myId = null;
+let myName = null;
+let myEmail = null;
+let googleUserInfo = null;
+const loginScreen = document.getElementById('loginScreen');
+const gameCanvas = document.getElementById('gameCanvas');
+const chatInput = document.getElementById('chatInput');
+let socket = null;
+
+// Google Sign-In v2: manual button using GSI
+const GOOGLE_CLIENT_ID = "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";
+const loginBtn = document.getElementById('googleLoginBtn');
+
+// Botão de login Google
+loginBtn.onclick = () => {
+    window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleLogin
+    });
+    window.google.accounts.id.prompt((notification) => {
+        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            alert('Falha ao abrir o popup de login Google!');
+        }
+    });
+};
+
+function handleGoogleLogin(response) {
+    // Decodifica o JWT (Google Credential) para pegar email/nome
+    const payload = JSON.parse(atob(response.credential.split('.')[1]));
+    myEmail = payload.email;
+    myName = payload.name;
+    googleUserInfo = { email: myEmail, name: myName };
+    startGameWithGoogle();
+}
+
+function startGameWithGoogle() {
+    loginScreen.style.display = 'none';
+    gameCanvas.style.display = 'block';
+    chatInput.style.display = 'none';
+    connectSocketWithAuth();
+}
+
+// --------- Socket.IO Game ---------
+function connectSocketWithAuth() {
+    socket = io({ auth: { userInfo: googleUserInfo } });
+
+    socket.on('connect', () => {
+        myId = socket.id;
+    });
+    socket.on('gameStateUpdate', (serverState) => {
+        gameState = serverState;
+    });
+    socket.on('newMessage', (message) => {
+        chatMessages.push(message);
+        if (chatMessages.length > MAX_MESSAGES) chatMessages.shift();
+    });
+    socket.on('banMessage', (data) => {
+        alert(data.reason);
+        document.body.innerHTML = `<h1 style="color:${data.color};text-align:center;margin-top:40vh;">${data.reason}</h1>`;
+    });
+}
+
+// --------- Game Vars ---------
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+const movement = { up: false, down: false, left: false, right: false };
+let mouse = { x: 0, y: 0 };
+let isMenuOpen = false;
+let activeMenuTab = 'items';
+let isChatting = false;
+let chatMessages = [];
+const MAX_MESSAGES = 7;
+let gameState = { players: {}, arrows: [], timeLeft: 120, startTime: 60, gamePhase: 'waiting', abilityCosts: {} };
 
-/* Setup visual do canvas e input do chat */
+// --------- Images ---------
+function loadImage(src) { const img = new Image(); img.src = src; return img; }
+const human = loadImage('Sprites/Human.png');
+const zombie = loadImage('Sprites/Zombie.png');
+const box = loadImage('Sprites/Box.png');
+const grass = loadImage('Sprites/Grass.png');
+const street = loadImage('Sprites/Street.png');
+const sand = loadImage('Sprites/Sand.png');
+const sea = loadImage('Sprites/Sea.png');
+const sunshade = loadImage('Sprites/Sunshade.png');
+const sunshadeII = loadImage('Sprites/SunshadeII.png');
+const sunshadeIII = loadImage('Sprites/SunshadeII.png');
+const ductSprite = loadImage('Sprites/Duct.png');
+const chest = loadImage('Sprites/Chest.png');
+const floors = loadImage('Sprites/Floor.png');
+const garageFloor = loadImage('Sprites/garageFloor.png');
+const ant = loadImage('Sprites/Ant.png');
+const smallBed = loadImage('Sprites/smallBed.png');
+const smallTable = loadImage('Sprites/smallTable.png');
+const bigTable = loadImage('Sprites/bigTable.png');
+const car = loadImage('Sprites/Car.png');
+const skateboardSprite = loadImage('Sprites/Skateboard.png');
+
+// --------- Visual Setup ---------
 (function setup() {
-    const chatInput = document.getElementById('chatInput');
-    const body = document.body;
-    body.style.backgroundColor = '#000000';
-    body.style.margin = '0';
-    body.style.overflow = 'hidden';
+    document.body.style.backgroundColor = '#000000';
+    document.body.style.margin = '0';
+    document.body.style.overflow = 'hidden';
     chatInput.style.display = 'none';
     chatInput.style.position = 'absolute';
     chatInput.style.bottom = '20px';
@@ -31,72 +126,14 @@ const ctx = canvas.getContext('2d');
     window.addEventListener('resize', resizeCanvas);
 })();
 
-/* Autenticação por email antes de conectar */
-const email = prompt("Digite seu email para autenticação:");
-const socket = io({ auth: { email } });
-
-function loadImage(src) {
-    const img = new Image();
-    img.src = src;
-    return img;
-}
-const human = loadImage('Sprites/Human.png');
-const zombie = loadImage('Sprites/Zombie.png');
-const box = loadImage('Sprites/Box.png');
-const grass = loadImage('Sprites/Grass.png');
-const street = loadImage('Sprites/Street.png');
-const sand = loadImage('Sprites/Sand.png');
-const sea = loadImage('Sprites/Sea.png');
-const sunshade = loadImage('Sprites/Sunshade.png');
-const sunshadeII = loadImage('Sprites/SunshadeII.png');
-const sunshadeIII = loadImage('Sprites/SunshadeII.png');
-const ductSprite = loadImage('Sprites/Duct.png');
-const chest = loadImage('Sprites/Chest.png');
-const floors = loadImage('Sprites/Floor.png');
-const garageFloor = loadImage('Sprites/garageFloor.png');
-const ant = loadImage('Sprites/Ant.png');
-const smallBed = loadImage('Sprites/smallBed.png');
-const smallTable = loadImage('Sprites/smallTable.png');
-const bigTable = loadImage('Sprites/bigTable.png');
-const car = loadImage('Sprites/Car.png');
-const skateboardSprite = loadImage('Sprites/Skateboard.png');
-let myId = null;
-let gameState = { players: {}, arrows: [], timeLeft: 120, startTime: 60, gamePhase: 'waiting', abilityCosts: {} };
-const movement = { up: false, down: false, left: false, right: false };
-let mouse = { x: 0, y: 0 };
-let isMenuOpen = false;
-let activeMenuTab = 'items';
-const chatInput = document.getElementById('chatInput');
-let isChatting = false;
-let chatMessages = [];
-const MAX_MESSAGES = 7;
-socket.on('connect', () => {
-    myId = socket.id;
-});
-socket.on('gameStateUpdate', (serverState) => {
-    gameState = serverState;
-});
-socket.on('newMessage', (message) => {
-    chatMessages.push(message);
-    if (chatMessages.length > MAX_MESSAGES) {
-        chatMessages.shift();
-    }
-});
-// Mensagem de banimento se receber do servidor
-socket.on('banMessage', (data) => {
-    alert(data.reason);
-    document.body.innerHTML = `<h1 style="color:${data.color};text-align:center;margin-top:40vh;">${data.reason}</h1>`;
-});
-
+// --------- Input ---------
 window.addEventListener('keydown', function (event) {
     const key = event.key.toLowerCase();
     if (key === 'enter') {
         event.preventDefault();
         if (isChatting) {
             const messageText = chatInput.value.trim();
-            if (messageText) {
-                socket.emit('sendMessage', messageText);
-            }
+            if (messageText) socket.emit('sendMessage', messageText);
             chatInput.value = '';
             chatInput.blur();
         } else {
@@ -109,16 +146,9 @@ window.addEventListener('keydown', function (event) {
         chatInput.blur();
     }
     chatInput.onfocus = () => { isChatting = true; };
-    chatInput.onblur = () => {
-        isChatting = false;
-        chatInput.style.display = 'none';
-    };
-    if (key === 'b') {
-        isMenuOpen = !isMenuOpen;
-    }
-    if (isMenuOpen || isChatting) {
-        return;
-    }
+    chatInput.onblur = () => { isChatting = false; chatInput.style.display = 'none'; };
+    if (key === 'b') isMenuOpen = !isMenuOpen;
+    if (isMenuOpen || isChatting) return;
     switch (key) {
         case 'w': case 'arrowup': movement.up = true; break;
         case 's': case 'arrowdown': movement.down = true; break;
@@ -182,6 +212,188 @@ canvas.addEventListener('mousedown', function (event) {
         socket.emit('playerAction', { type: 'primary_action' });
     }
 });
+
+function isClickInside(pos, rect) {
+    return pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height;
+}
+
+function getPlayerAngle(player) {
+    if (!player) return 0;
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const dx = mouse.x - cx;
+    const dy = mouse.y - cy;
+    return Math.atan2(dy, dx);
+}
+function getFunctionsTabRect() {
+    const mX = (canvas.width - 1500) / 2;
+    const mY = (canvas.height - 900) / 2;
+    return { x: mX + 10, y: mY + 10, width: 200, height: 60 };
+}
+function getItemsTabRect() {
+    const mX = (canvas.width - 1500) / 2;
+    const mY = (canvas.height - 900) / 2;
+    return { x: mX + 220, y: mY + 10, width: 200, height: 60 };
+}
+function getChameleonButtonRect() {
+    const mY = (canvas.height - 400) / 2;
+    return { x: canvas.width / 2 - 150, y: mY + 200, width: 300, height: 50 };
+}
+function getAthleteButtonRect() {
+    const mY = (canvas.height - 400) / 2;
+    return { x: canvas.width / 2 - 150, y: mY + 275, width: 300, height: 50 };
+}
+function getArcherButtonRect() {
+    const mY = (canvas.height - 400) / 2;
+    return { x: canvas.width / 2 - 150, y: mY + 350, width: 300, height: 50 };
+}
+function getEngineerButtonRect() {
+    const mY = (canvas.height - 400) / 2;
+    return { x: canvas.width / 2 - 150, y: mY + 425, width: 300, height: 50 };
+}
+function getAntButtonRect() {
+    const mY = (canvas.height - 400) / 2;
+    return { x: canvas.width / 2 - 150, y: mY + 500, width: 300, height: 50 };
+}
+function getSpyButtonRect() {
+    const mY = (canvas.height - 400) / 2;
+    return { x: canvas.width / 2 - 150, y: mY + 575, width: 300, height: 50 };
+}
+
+// --------- Ranking (PÓDIGO) ---------
+function drawPodiumRanking() {
+    // ranking: top 10 jogadores online, por moedas (coins)
+    let sorted = Object.values(gameState.players)
+        .filter(p => p && typeof p.coins === "number")
+        .sort((a, b) => b.coins - a.coins)
+        .slice(0, 10);
+
+    if (sorted.length === 0) return;
+    const pad = 20, rowH = 35, width = 340, height = sorted.length * rowH + pad * 2 + 14;
+    const x = canvas.width - width - 24, y = 18;
+
+    // Fundo
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = "#181818";
+    ctx.fillRect(x, y, width, height);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "#27ae60";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x, y, width, height);
+
+    // Título
+    ctx.font = "22px Arial";
+    ctx.fillStyle = "#27ae60";
+    ctx.textAlign = "center";
+    ctx.fillText("🏆 PÓDIGO (Ranking)", x + width / 2, y + pad+2);
+
+    // Linhas dos jogadores
+    ctx.font = "19px Arial";
+    sorted.forEach((player, idx) => {
+        ctx.fillStyle = idx === 0 ? "#ffd700" : idx === 1 ? "#b5b5b5" : idx === 2 ? "#cd7f32" : "#fff";
+        ctx.textAlign = "left";
+        ctx.fillText(`${idx + 1}.`, x + pad, y + pad + 32 + idx * rowH);
+        ctx.fillText(player.name, x + pad + 30, y + pad + 32 + idx * rowH);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#fff";
+        ctx.fillText(`🪙 ${player.coins}`, x + width - pad, y + pad + 32 + idx * rowH);
+    });
+    ctx.restore();
+}
+
+function drawChat() {
+    if (chatMessages.length === 0) return;
+    ctx.save();
+    const chatBoxX = 10;
+    const chatBoxY = canvas.height - 200 - (chatMessages.length * 25);
+    const chatBoxWidth = 500;
+    const chatBoxHeight = (chatMessages.length * 25) + 10;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillRect(chatBoxX, chatBoxY, chatBoxWidth, chatBoxHeight);
+    ctx.font = '18px Arial';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    chatMessages.forEach((msg, index) => {
+        const fullMessage = `${msg.name}: ${msg.text}`;
+        ctx.fillStyle = msg.name === 'Servidor' ? 'yellow' : 'gold';
+        ctx.fillText(msg.name + ':', chatBoxX + 10, chatBoxY + 5 + (index * 25));
+        ctx.fillStyle = 'white';
+        const nameWidth = ctx.measureText(msg.name + ': ').width;
+        ctx.fillText(msg.text, chatBoxX + 10 + nameWidth, chatBoxY + 5 + (index * 25));
+    });
+    ctx.restore();
+}
+
+function drawMenu() {
+    const me = gameState.players[myId];
+    if (!me) return;
+    const menuWidth = 1500, menuHeight = 900;
+    const menuX = (canvas.width - menuWidth) / 2, menuY = (canvas.height - menuHeight) / 2;
+    ctx.fillStyle = '#4d4c4cff';
+    ctx.fillRect(menuX, menuY, menuWidth, menuHeight);
+    ctx.strokeStyle = '#000000ff';
+    ctx.lineWidth = 5;
+    ctx.strokeRect(menuX, menuY, menuWidth, menuHeight);
+    const functionsTabBtn = getFunctionsTabRect();
+    const itemsTabBtn = getItemsTabRect();
+    ctx.fillStyle = activeMenuTab === 'functions' ? '#000000ff' : '#444';
+    ctx.fillRect(functionsTabBtn.x, functionsTabBtn.y, functionsTabBtn.width, functionsTabBtn.height);
+    ctx.fillStyle = activeMenuTab === 'items' ? '#000000ff' : '#444';
+    ctx.fillRect(itemsTabBtn.x, itemsTabBtn.y, itemsTabBtn.width, itemsTabBtn.height);
+    ctx.fillStyle = 'white';
+    ctx.font = '30px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('HABILIDADES', functionsTabBtn.x + functionsTabBtn.width / 2, functionsTabBtn.y + 40);
+    ctx.fillText('ITENS', itemsTabBtn.x + itemsTabBtn.width / 2, itemsTabBtn.y + 40);
+    if (activeMenuTab === 'functions') {
+        ctx.font = '50px Arial';
+        ctx.fillText('ESCOLHA UMA HABILIDADE', canvas.width / 2, menuY + 140);
+        if (me.activeAbility === ' ') {
+            const buttons = [
+                { text: 'CAMALEÃO', ability: 'chameleon', rect: getChameleonButtonRect() },
+                { text: 'ATLETA', ability: 'athlete', rect: getAthleteButtonRect() },
+                { text: 'ARQUEIRO', ability: 'archer', rect: getArcherButtonRect() },
+                { text: 'ENGENHEIRO', ability: 'engineer', rect: getEngineerButtonRect() },
+                { text: 'FORMIGA', ability: 'ant', rect: getAntButtonRect() },
+                { text: 'ESPIÃO', ability: 'spy', rect: getSpyButtonRect() }
+            ];
+            buttons.forEach(btn => {
+                const isTaken = gameState.takenAbilities.includes(btn.ability);
+                const cost = gameState.abilityCosts[btn.ability] || 0;
+                const canAfford = me.coins >= cost;
+                ctx.fillStyle = isTaken ? '#888' : (canAfford ? 'white' : 'white');
+                ctx.strokeStyle = isTaken ? '#555' : (canAfford ? 'white' : 'white');
+                ctx.lineWidth = 3;
+                ctx.strokeRect(btn.rect.x - 10, btn.rect.y - 10, btn.rect.width + 10, btn.rect.height + 10);
+                ctx.font = '40px Arial';
+                ctx.textAlign = 'center';
+                const buttonText = isTaken ? `${btn.text} (INDISPONÍVEL)` : btn.text;
+                ctx.fillText(buttonText, btn.rect.x + btn.rect.width / 2, btn.rect.y + 35);
+                ctx.font = '30px Arial';
+                ctx.textAlign = 'left';
+                ctx.fillStyle = canAfford ? 'gold' : 'red';
+                ctx.fillText(`🪙 ${cost}`, btn.rect.x + btn.rect.width + 30, btn.rect.y + 35);
+            });
+        } else {
+            ctx.font = '40px Arial';
+            ctx.fillStyle = 'grey';
+            ctx.fillText('HABILIDADE JÁ ESCOLHIDA!', canvas.width / 2, canvas.height / 2);
+        }
+    } else if (activeMenuTab === 'items') {
+        ctx.font = '50px Arial';
+        ctx.fillText('LOJA', canvas.width / 2, menuY + 140);
+        ctx.font = '30px Arial';
+        ctx.fillStyle = 'grey';
+        ctx.fillText(me.inventory.length === 0 ? 'Inventário vazio' : me.inventory.join(', '), canvas.width / 2, canvas.height / 2);
+    }
+    ctx.font = '20px Arial';
+    ctx.fillStyle = 'white';
+    ctx.textAlign = 'center';
+    ctx.fillText('PRESSIONE "B" PARA FECHAR', canvas.width / 2 + 580, menuY + menuHeight - 20);
+}
+
+// --------- Render ---------
 function draw() {
     if (!myId || !gameState.players || !gameState.players[myId]) {
         ctx.fillStyle = 'black';
@@ -389,149 +601,16 @@ function draw() {
         ctx.fillText(`USOS RESTANTES: ${me.spyUsesLeft}`, 10, canvas.height - 80);
     }
     drawChat();
+    drawPodiumRanking();
     if (isMenuOpen) {
         drawMenu();
     }
 }
-function drawChat() {
-    if (chatMessages.length === 0) return;
-    ctx.save();
-    const chatBoxX = 10;
-    const chatBoxY = canvas.height - 200 - (chatMessages.length * 25);
-    const chatBoxWidth = 500;
-    const chatBoxHeight = (chatMessages.length * 25) + 10;
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-    ctx.fillRect(chatBoxX, chatBoxY, chatBoxWidth, chatBoxHeight);
-    ctx.font = '18px Arial';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    chatMessages.forEach((msg, index) => {
-        const fullMessage = `${msg.name}: ${msg.text}`;
-        ctx.fillStyle = msg.name === 'Servidor' ? 'yellow' : 'gold';
-        ctx.fillText(msg.name + ':', chatBoxX + 10, chatBoxY + 5 + (index * 25));
-        ctx.fillStyle = 'white';
-        const nameWidth = ctx.measureText(msg.name + ': ').width;
-        ctx.fillText(msg.text, chatBoxX + 10 + nameWidth, chatBoxY + 5 + (index * 25));
-    });
-    ctx.restore();
-}
-function drawMenu() {
-    const me = gameState.players[myId];
-    if (!me) return;
-    const menuWidth = 1500, menuHeight = 900;
-    const menuX = (canvas.width - menuWidth) / 2, menuY = (canvas.height - menuHeight) / 2;
-    ctx.fillStyle = '#4d4c4cff';
-    ctx.fillRect(menuX, menuY, menuWidth, menuHeight);
-    ctx.strokeStyle = '#000000ff';
-    ctx.lineWidth = 5;
-    ctx.strokeRect(menuX, menuY, menuWidth, menuHeight);
-    const functionsTabBtn = getFunctionsTabRect();
-    const itemsTabBtn = getItemsTabRect();
-    ctx.fillStyle = activeMenuTab === 'functions' ? '#000000ff' : '#444';
-    ctx.fillRect(functionsTabBtn.x, functionsTabBtn.y, functionsTabBtn.width, functionsTabBtn.height);
-    ctx.fillStyle = activeMenuTab === 'items' ? '#000000ff' : '#444';
-    ctx.fillRect(itemsTabBtn.x, itemsTabBtn.y, itemsTabBtn.width, itemsTabBtn.height);
-    ctx.fillStyle = 'white';
-    ctx.font = '30px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('HABILIDADES', functionsTabBtn.x + functionsTabBtn.width / 2, functionsTabBtn.y + 40);
-    ctx.fillText('ITENS', itemsTabBtn.x + itemsTabBtn.width / 2, itemsTabBtn.y + 40);
-    if (activeMenuTab === 'functions') {
-        ctx.font = '50px Arial';
-        ctx.fillText('ESCOLHA UMA HABILIDADE', canvas.width / 2, menuY + 140);
-        if (me.activeAbility === ' ') {
-            const buttons = [
-                { text: 'CAMALEÃO', ability: 'chameleon', rect: getChameleonButtonRect() },
-                { text: 'ATLETA', ability: 'athlete', rect: getAthleteButtonRect() },
-                { text: 'ARQUEIRO', ability: 'archer', rect: getArcherButtonRect() },
-                { text: 'ENGENHEIRO', ability: 'engineer', rect: getEngineerButtonRect() },
-                { text: 'FORMIGA', ability: 'ant', rect: getAntButtonRect() },
-                { text: 'ESPIÃO', ability: 'spy', rect: getSpyButtonRect() }
-            ];
-            buttons.forEach(btn => {
-                const isTaken = gameState.takenAbilities.includes(btn.ability);
-                const cost = gameState.abilityCosts[btn.ability] || 0;
-                const canAfford = me.coins >= cost;
-                ctx.fillStyle = isTaken ? '#888' : (canAfford ? 'white' : 'white');
-                ctx.strokeStyle = isTaken ? '#555' : (canAfford ? 'white' : 'white');
-                ctx.lineWidth = 3;
-                ctx.strokeRect(btn.rect.x - 10, btn.rect.y - 10, btn.rect.width + 10, btn.rect.height + 10);
-                ctx.font = '40px Arial';
-                ctx.textAlign = 'center';
-                const buttonText = isTaken ? `${btn.text} (INDISPONÍVEL)` : btn.text;
-                ctx.fillText(buttonText, btn.rect.x + btn.rect.width / 2, btn.rect.y + 35);
-                ctx.font = '30px Arial';
-                ctx.textAlign = 'left';
-                ctx.fillStyle = canAfford ? 'gold' : 'red';
-                ctx.fillText(`🪙 ${cost}`, btn.rect.x + btn.rect.width + 30, btn.rect.y + 35);
-            });
-        } else {
-            ctx.font = '40px Arial';
-            ctx.fillStyle = 'grey';
-            ctx.fillText('HABILIDADE JÁ ESCOLHIDA!', canvas.width / 2, canvas.height / 2);
-        }
-    } else if (activeMenuTab === 'items') {
-        ctx.font = '50px Arial';
-        ctx.fillText('LOJA', canvas.width / 2, menuY + 140);
-        ctx.font = '30px Arial';
-        ctx.fillStyle = 'grey';
-        ctx.fillText(me.inventory.length === 0 ? 'Inventário vazio' : me.inventory.join(', '), canvas.width / 2, canvas.height / 2);
-    }
-    ctx.font = '20px Arial';
-    ctx.fillStyle = 'white';
-    ctx.textAlign = 'center';
-    ctx.fillText('PRESSIONE "B" PARA FECHAR', canvas.width / 2 + 580, menuY + menuHeight - 20);
-}
-function isClickInside(pos, rect) {
-    return pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height;
-}
-function getPlayerAngle(player) {
-    if (!player) return 0;
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
-    const dx = mouse.x - cx;
-    const dy = mouse.y - cy;
-    return Math.atan2(dy, dx);
-}
-function getFunctionsTabRect() {
-    const mX = (canvas.width - 1500) / 2;
-    const mY = (canvas.height - 900) / 2;
-    return { x: mX + 10, y: mY + 10, width: 200, height: 60 };
-}
-function getItemsTabRect() {
-    const mX = (canvas.width - 1500) / 2;
-    const mY = (canvas.height - 900) / 2;
-    return { x: mX + 220, y: mY + 10, width: 200, height: 60 };
-}
-function getChameleonButtonRect() {
-    const mY = (canvas.height - 400) / 2;
-    return { x: canvas.width / 2 - 150, y: mY + 200, width: 300, height: 50 };
-}
-function getAthleteButtonRect() {
-    const mY = (canvas.height - 400) / 2;
-    return { x: canvas.width / 2 - 150, y: mY + 275, width: 300, height: 50 };
-}
-function getArcherButtonRect() {
-    const mY = (canvas.height - 400) / 2;
-    return { x: canvas.width / 2 - 150, y: mY + 350, width: 300, height: 50 };
-}
-function getEngineerButtonRect() {
-    const mY = (canvas.height - 400) / 2;
-    return { x: canvas.width / 2 - 150, y: mY + 425, width: 300, height: 50 };
-}
-function getAntButtonRect() {
-    const mY = (canvas.height - 400) / 2;
-    return { x: canvas.width / 2 - 150, y: mY + 500, width: 300, height: 50 };
-}
-function getSpyButtonRect() {
-    const mY = (canvas.height - 400) / 2;
-    return { x: canvas.width / 2 - 150, y: mY + 575, width: 300, height: 50 };
-}
+
 function gameLoop() {
     if (myId && gameState.players[myId]) {
         const me = gameState.players[myId];
         const rot = getPlayerAngle(me);
-
         socket.emit('playerInput', { movement: movement, mouse: mouse, rotation: rot });
     }
     draw();
