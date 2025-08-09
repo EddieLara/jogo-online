@@ -80,6 +80,8 @@ socket.on('newMessage', (message) => {
 });
 window.addEventListener('keydown', function (event) {
     const key = event.key.toLowerCase();
+    const me = gameState.players[myId];
+
     if (key === 'enter') {
         event.preventDefault();
         if (isChatting) {
@@ -104,7 +106,9 @@ window.addEventListener('keydown', function (event) {
         chatInput.style.display = 'none';
     };
     if (key === 'b') {
-        isMenuOpen = !isMenuOpen;
+        if (me && me.role !== 'zombie') {
+            isMenuOpen = !isMenuOpen;
+        }
     }
     if (isMenuOpen || isChatting) {
         return;
@@ -114,8 +118,16 @@ window.addEventListener('keydown', function (event) {
         case 's': case 'arrowdown': movement.down = true; break;
         case 'a': case 'arrowleft': movement.left = true; break;
         case 'd': case 'arrowright': movement.right = true; break;
-        case 'e': socket.emit('playerAction', { type: 'interact' }); break;
-        case 'c': socket.emit('playerAction', { type: 'ability' }); break;
+        case 'e':
+            if (me && me.role !== 'zombie') {
+                socket.emit('playerAction', { type: 'interact' });
+            }
+            break;
+        case 'c':
+            if (me && me.role !== 'zombie') {
+                socket.emit('playerAction', { type: 'ability' });
+            }
+            break;
         case 'g': socket.emit('playerAction', { type: 'drop_skateboard' }); break;
     }
 });
