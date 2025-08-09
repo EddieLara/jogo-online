@@ -1,5 +1,7 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+
+/* Setup visual do canvas e input do chat */
 (function setup() {
     const chatInput = document.getElementById('chatInput');
     const body = document.body;
@@ -29,7 +31,9 @@ const ctx = canvas.getContext('2d');
     window.addEventListener('resize', resizeCanvas);
 })();
 
-const socket = io('https://jogo-online-medv.onrender.com');
+/* Autenticação por email antes de conectar */
+const email = prompt("Digite seu email para autenticação:");
+const socket = io({ auth: { email } });
 
 function loadImage(src) {
     const img = new Image();
@@ -78,6 +82,12 @@ socket.on('newMessage', (message) => {
         chatMessages.shift();
     }
 });
+// Mensagem de banimento se receber do servidor
+socket.on('banMessage', (data) => {
+    alert(data.reason);
+    document.body.innerHTML = `<h1 style="color:${data.color};text-align:center;margin-top:40vh;">${data.reason}</h1>`;
+});
+
 window.addEventListener('keydown', function (event) {
     const key = event.key.toLowerCase();
     if (key === 'enter') {
