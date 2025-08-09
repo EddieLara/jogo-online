@@ -235,7 +235,6 @@ function buildWalls(structure) {
     }
 }
 
-// Função para criar novo player (com email e nome se vierem via auth)
 function createNewPlayer(socket, userInfo) {
     let name = userInfo && userInfo.name ? userInfo.name : `Player${Math.floor(100 + Math.random() * 900)}`;
     gameState.players[socket.id] = {
@@ -274,8 +273,7 @@ function createNewPlayer(socket, userInfo) {
         email: userInfo && userInfo.email ? userInfo.email : (socket.handshake.auth && socket.handshake.auth.email ? socket.handshake.auth.email : null)
     };
 }
-<<<<<<< HEAD
-=======
+
 function getVertices(rect) {
     const vertices = [];
     const cx = rect.x + rect.width / 2;
@@ -301,7 +299,7 @@ function getAxes(vertices) {
     const axes = [];
     for (let i = 0; i < vertices.length; i++) {
         const p1 = vertices[i];
-        const p2 = vertices[i + 1 == vertices.length ? 0 : i + 1];
+        const p2 = i + 1 == vertices.length ? vertices[0] : vertices[i + 1];
         const edge = { x: p1.x - p2.x, y: p1.y - p2.y };
         const normal = { x: -edge.y, y: edge.x };
         const length = Math.sqrt(normal.x * normal.x + normal.y * normal.y);
@@ -349,335 +347,10 @@ function checkCollisionSAT(poly1, poly2) {
     return mtv;
 }
 
-function updateGameState() {
-    const allCollidables = [...gameState.box, ...gameState.furniture];
-    for (let i = 0; i < allCollidables.length; i++) {
-        const item1 = allCollidables[i];
-        for (let j = i + 1; j < allCollidables.length; j++) {
-            const item2 = allCollidables[j];
-            const mtv = checkCollisionSAT(item1, item2);
-            if (mtv) {
-                item1.x -= mtv.x / 2;
-                item1.y -= mtv.y / 2;
-                item2.x += mtv.x / 2;
-                item2.y += mtv.y / 2;
-                const tempVx = item1.vx;
-                const tempVy = item1.vy;
-                item1.vx = item2.vx * BOX_COLLISION_DAMPING;
-                item1.vy = item2.vy * BOX_COLLISION_DAMPING;
-                item2.vx = tempVx * BOX_COLLISION_DAMPING;
-                item2.vy = tempVy * BOX_COLLISION_DAMPING;
-                const impactForce = Math.sqrt(mtv.x * mtv.x + mtv.y * mtv.y);
-                const torque1 = (mtv.y * impactForce - mtv.x * impactForce) * TORQUE_FACTOR * 0.1;
-                const torque2 = -(mtv.y * impactForce - mtv.x * impactForce) * TORQUE_FACTOR * 0.1;
-                item1.angularVelocity += torque1;
-                item2.angularVelocity += torque2;
-            }
-        }
-        item1.x += item1.vx;
-        item1.y += item1.vy;
-        item1.rotation += item1.angularVelocity;
-        item1.vx *= BOX_FRICTION;
-        item1.vy *= BOX_FRICTION;
-        item1.angularVelocity *= ANGULAR_FRICTION;
-        const obstacles = [...gameState.house.walls, ...gameState.garage.walls, gameState.chest];
-        for (const obstacle of obstacles) {
-            const mtv = checkCollisionSAT(item1, obstacle);
-            if (mtv) {
-                item1.x -= mtv.x;
-                item1.y -= mtv.y;
-                const dot = item1.vx * mtv.x + item1.vy * mtv.y;
-                const lenSq = mtv.x * mtv.x + mtv.y * mtv.y;
-                if (lenSq > 0) {
-                    const reflectionX = item1.vx - 2 * dot * mtv.x / lenSq;
-                    const reflectionY = item1.vy - 2 * dot * mtv.y / lenSq;
-                    item1.vx = reflectionX * BOX_COLLISION_DAMPING * 0.5;
-                    item1.vy = reflectionY * BOX_COLLISION_DAMPING * 0.5;
-                }
-                item1.angularVelocity *= -0.5;
-            }
-        }
-        if (item1.x < 0) { item1.x = 0; item1.vx *= -0.5; }
-        if (item1.x + item1.width > WORLD_WIDTH) { item1.x = WORLD_WIDTH - item1.width; item1.vx *= -0.5; }
-        if (item1.y < 0) { item1.y = 0; item1.vy *= -0.5; }
-        if (item1.y + item1.height > WORLD_HEIGHT) { item1.y = WORLD_HEIGHT - item1.height; item1.vy *= -0.5; }
-    }
-
-    for (const id in gameState.players) {
-        const player = gameState.players[id];
-        const hitboxWidth = player.width * 0.4;
-        const hitboxHeight = player.height * 0.7;
-        player.hitbox = {
-            width: hitboxWidth,
-            height: hitboxHeight,
-            x: player.x + (player.width - hitboxWidth) / 2,
-            y: player.y + (player.height - hitboxHeight) / 2,
-        };
-
-        if (player.hasSkateboard) {
-            if (player.activeAbility === 'chameleon' && player.isCamouflaged) {
-                player.isCamouflaged = false;
-            }
-            const originalX = player.x;
-            const originalY = player.y;
-            const skateSpeed = SKATEBOARD_SPEED_BOOST;
-            const angle = player.rotation;
-            
-            player.x += Math.cos(angle) * skateSpeed;
-            player.hitbox.x = player.x + (player.width - player.hitbox.width) / 2;
-            let collidedX = false;
-            for (const wall of [...gameState.house.walls, ...gameState.garage.walls]) { if (isColliding(player.hitbox, wall)) { collidedX = true; } }
-            if (isColliding(player.hitbox, gameState.chest)) { collidedX = true; }
-            if (player.x < 0 || player.x + player.width > WORLD_WIDTH) { collidedX = true; }
-            if (collidedX) {
-                player.x = originalX;
-                player.hitbox.x = player.x + (player.width - player.hitbox.width) / 2;
-            }
-
-            player.y += Math.sin(angle) * skateSpeed;
-            player.hitbox.y = player.y + (player.height - player.hitbox.height) / 2;
-            let collidedY = false;
-            for (const wall of [...gameState.house.walls, ...gameState.garage.walls]) { if (isColliding(player.hitbox, wall)) { collidedY = true; } }
-            if (isColliding(player.hitbox, gameState.chest)) { collidedY = true; }
-            if (player.y < 0 || player.y + player.height > WORLD_HEIGHT) { collidedY = true; }
-            if (collidedY) {
-                player.y = originalY;
-                player.hitbox.y = player.y + (player.height - player.hitbox.height) / 2;
-            }
-        } else if (player.input.movement.up || player.input.movement.down || player.input.movement.left || player.input.movement.right) {
-            if (player.activeAbility === 'chameleon' && player.isCamouflaged) {
-                player.isCamouflaged = false;
-            }
-            const originalX = player.x;
-            const originalY = player.y;
-            if (player.input.movement.left) { player.x -= player.speed; }
-            if (player.input.movement.right) { player.x += player.speed; }
-            player.hitbox.x = player.x + (player.width - player.hitbox.width) / 2;
-            let collidedX = false;
-            for (const wall of [...gameState.house.walls, ...gameState.garage.walls]) {
-                if (isColliding(player.hitbox, wall)) { collidedX = true; }
-            }
-            if (isColliding(player.hitbox, gameState.chest)) { collidedX = true; }
-            if (player.x < 0 || player.x + player.width > WORLD_WIDTH) { collidedX = true; }
-            if (collidedX) {
-                player.x = originalX;
-                player.hitbox.x = player.x + (player.width - player.hitbox.width) / 2;
-            }
-            if (player.input.movement.up) { player.y -= player.speed; }
-            if (player.input.movement.down) { player.y += player.speed; }
-            player.hitbox.y = player.y + (player.height - player.hitbox.height) / 2;
-            let collidedY = false;
-            for (const wall of [...gameState.house.walls, ...gameState.garage.walls]) {
-                if (isColliding(player.hitbox, wall)) { collidedY = true; }
-            }
-            if (isColliding(player.hitbox, gameState.chest)) { collidedY = true; }
-            if (player.y < 0 || player.y + player.height > WORLD_HEIGHT) { collidedY = true; }
-            if (collidedY) {
-                player.y = originalY;
-                player.hitbox.y = player.y + (player.height - player.hitbox.height) / 2;
-            }
-        }
-        player.isHidden = false;
-        for (const sunshade of gameState.sunshades) {
-            if (isColliding(player.hitbox, sunshade)) {
-                player.isHidden = true;
-                break;
-            }
-        }
-       const playerPoly = { ...player.hitbox, rotation: 0 };
-       for (const item of allCollidables) {
-            const mtv = checkCollisionSAT(playerPoly, item);
-            if (mtv) {
-                if (player.hasSkateboard) {
-                    player.x -= mtv.x;
-                    player.y -= mtv.y;
-                    continue;
-                }
-
-                player.x -= mtv.x;
-                player.y -= mtv.y;
-
-                let pushDirectionX = 0;
-                let pushDirectionY = 0;
-                if (player.input.movement.up) { pushDirectionY -= 1; }
-                if (player.input.movement.down) { pushDirectionY += 1; }
-                if (player.input.movement.left) { pushDirectionX -= 1; }
-                if (player.input.movement.right) { pushDirectionX += 1; }
-                
-                const isPushing = Math.sqrt(pushDirectionX * pushDirectionX + pushDirectionY * pushDirectionY) > 0;
-
-                if (isPushing) {
-                    const contactVectorX = (player.x + player.width / 2) - (item.x + item.width / 2);
-                    const contactVectorY = (player.y + player.height / 2) - (item.y + item.height / 2);
-                    const torque = (contactVectorX * pushDirectionY - contactVectorY * pushDirectionX) * TORQUE_FACTOR;
-                    item.angularVelocity += torque;
-                }
-
-                const pushForceX = pushDirectionX * BOX_PUSH_FORCE;
-                const pushForceY = pushDirectionY * BOX_PUSH_FORCE;
-                const predictedItem = {
-                    ...item,
-                    x: item.x + item.vx + pushForceX,
-                    y: item.y + item.vy + pushForceY
-                };
-
-                let wouldCollideWithWall = false;
-                const staticObstacles = [...gameState.house.walls, ...gameState.garage.walls, gameState.chest];
-                for (const obstacle of staticObstacles) {
-                    if (checkCollisionSAT(predictedItem, obstacle)) {
-                        wouldCollideWithWall = true;
-                        break;
-                    }
-                }
-
-                if (!wouldCollideWithWall && isPushing) {
-                    item.vx += pushForceX;
-                    item.vy += pushForceY;
-                }
-            }
-       }
-        const allWalls = [...gameState.house.walls, ...gameState.garage.walls];
-        for (const wall of allWalls) {
-            playerPoly.x = player.x + (player.width - player.hitbox.width) / 2;
-            playerPoly.y = player.y + (player.height - player.hitbox.height) / 2;
-            const mtv = checkCollisionSAT(playerPoly, wall);
-            if (mtv) {
-                player.x -= mtv.x;
-                player.y -= mtv.y;
-            }
-        }
-    }
-
-    if (gameState.gamePhase === 'running') {
-        const players = gameState.players;
-        const playerIds = Object.keys(players);
-        let humanCount = 0;
-        let hasZombies = false;
-        for (const id1 of playerIds) {
-            const player1 = players[id1];
-            if (player1.role === 'zombie') {
-                hasZombies = true;
-                for (const id2 of playerIds) {
-                    if (id1 === id2) continue;
-                    const player2 = players[id2];
-                    if ((player2.role === 'human' || player2.isSpying) && isColliding(player1.hitbox, player2.hitbox)) {
-                        
-                        if (player2.hasSkateboard) {
-                            player2.hasSkateboard = false;
-                            gameState.skateboard.spawned = true;
-                            gameState.skateboard.ownerId = null;
-                            gameState.skateboard.x = player2.x;
-                            gameState.skateboard.y = player2.y + player2.height;
-                        }
-
-                        if (player2.isSpying) {
-                            player2.isSpying = false;
-                        }
-                        player2.role = 'zombie';
-                        player2.speed *= ZOMBIE_SPEED_BOOST;
-                        console.log(`${player2.name} has been infected!`);
-                        io.emit('newMessage', { name: 'Server', text: `${player2.name} has been infected!` });
-                    }
-                }
-            }
-        }
-        if (hasZombies) {
-            for (const id of playerIds) {
-                if (players[id].role === 'human' && !players[id].isSpying) {
-                    humanCount++;
-                }
-            }
-            if (humanCount === 0 && playerIds.length > 0) {
-                console.log("All humans have been infected! Restarting the round.");
-                io.emit('newMessage', { name: 'Server', text: 'The Zombies have won!' });
-
-                const skateWasOnGround = gameState.skateboard.spawned;
-                let skateOwnerId = null;
-                for (const id in gameState.players) {
-                    if (gameState.players[id].hasSkateboard) {
-                        skateOwnerId = id;
-                        break;
-                    }
-                }
-
-                const currentPlayers = gameState.players;
-                initializeGame();
-                gameState.players = currentPlayers;
-
-                if (skateWasOnGround || !skateOwnerId) {
-                    spawnSkateboard();
-                } else {
-                    gameState.skateboard.ownerId = skateOwnerId;
-                    gameState.skateboard.spawned = false;
-                }
-                
-                for (const id in gameState.players) {
-                    const player = gameState.players[id];
-                    player.x = WORLD_WIDTH / 2 + 500;
-                    player.y = WORLD_HEIGHT / 2;
-                    player.role = 'human';
-                    player.activeAbility = ' ';
-                    player.width = INITIAL_PLAYER_SIZE;
-                    player.height = INITIAL_PLAYER_SIZE * 1.25;
-                    player.speed = INITIAL_PLAYER_SPEED;
-                    if (id !== skateOwnerId) {
-                        player.hasSkateboard = false;
-                    }
-                }
-            }
-        }
-    }
-    for (let i = gameState.arrows.length - 1; i >= 0; i--) {
-        const arrow = gameState.arrows[i];
-
-        if (arrow.hasHit) {
-            continue;
-        }
-
-        arrow.x += Math.cos(arrow.angle) * ARROW_SPEED;
-        arrow.y += Math.sin(arrow.angle) * ARROW_SPEED;
-
-        let hitDetected = false;
-
-        for (const playerId in gameState.players) {
-            const player = gameState.players[playerId];
-            if (arrow.ownerId === playerId || !player.hitbox || player.isInDuct) {
-                continue;
-            }
-
-            const arrowHitbox = { x: arrow.x, y: arrow.y, width: arrow.width, height: arrow.height };
-
-            if (isColliding(arrowHitbox, player.hitbox)) {
-                player.x += Math.cos(arrow.angle) * ARROW_KNOCKBACK;
-                player.y += Math.sin(arrow.angle) * ARROW_KNOCKBACK;
-                
-                arrow.hasHit = true;
-                hitDetected = true;
-
-                const arrowIdToRemove = arrow.id;
-                setTimeout(() => {
-                    const index = gameState.arrows.findIndex(a => a.id === arrowIdToRemove);
-                    if (index !== -1) {
-                        gameState.arrows.splice(index, 1);
-                    }
-                }, ARROW_LIFESPAN_AFTER_HIT);
-
-                break;
-            }
-        }
-
-        if (!hitDetected) {
-            if (arrow.x < 0 || arrow.x > WORLD_WIDTH || arrow.y < 0 || arrow.y > WORLD_HEIGHT) {
-                gameState.arrows.splice(i, 1);
-            }
-        }
-    }
-}
->>>>>>> 4ea81ec2aaee5dd9ca5d23fc30f778e89bff4a1a
+// Você pode colocar aqui a função isColliding, se ela existir em outro arquivo
 
 // ================= SOCKET.IO ===================
 io.on('connection', (socket) => {
-<<<<<<< HEAD
     // Usuário pode passar email/nome via socket.handshake.auth
     const userInfo = socket.handshake.auth && socket.handshake.auth.userInfo
         ? socket.handshake.auth.userInfo
@@ -693,10 +366,6 @@ io.on('connection', (socket) => {
     console.log('Novo jogador conectado:', socket.id);
     createNewPlayer(socket, userInfo);
 
-=======
-    console.log('New player connected:', socket.id);
-    createNewPlayer(socket);
->>>>>>> 4ea81ec2aaee5dd9ca5d23fc30f778e89bff4a1a
     socket.on('playerInput', (inputData) => {
         const player = gameState.players[socket.id];
         if (player) {
@@ -716,23 +385,26 @@ io.on('connection', (socket) => {
             if (ability === 'archer') player.arrowAmmo = 100;
         }
     });
-<<<<<<< HEAD
 
     socket.on('playerAction', (actionData) => {
         const player = gameState.players[socket.id];
         if (!player) return;
+
         if (actionData.type === 'primary_action') {
             if (player.activeAbility === 'archer' && player.arrowAmmo > 0) {
                 player.arrowAmmo--;
                 gameState.arrows.push({
+                    id: nextArrowId++,
                     x: player.x + player.width / 2,
                     y: player.y + player.height / 2,
                     width: 10, height: 10, color: 'red',
                     angle: player.rotation,
-                    ownerId: player.id
+                    ownerId: player.id,
+                    hasHit: false
                 });
             }
         }
+
         if (actionData.type === 'ability') {
             if (player.activeAbility === 'chameleon' && player.camouflageAvailable) {
                 player.isCamouflaged = true;
@@ -792,110 +464,52 @@ io.on('connection', (socket) => {
                     }
                 }, SPY_COOLDOWN);
             }
+            if (player.activeAbility === 'engineer' && !player.engineerAbilityUsed && !player.isInDuct) {
+                for (let i = 0; i < gameState.ducts.length; i++) {
+                    if (isColliding(player.hitbox, gameState.ducts[i])) {
+                        player.isInDuct = true;
+                        player.engineerAbilityUsed = true;
+                        const exitDuct = gameState.ducts[(i + 1) % gameState.ducts.length];
+                        setTimeout(() => {
+                            if (gameState.players[socket.id]) {
+                                player.x = exitDuct.x + exitDuct.width / 2 - player.width / 2;
+                                player.y = exitDuct.y + exitDuct.height / 2 - player.height / 2;
+                                player.isInDuct = false;
+                            }
+                        }, DUCT_TRAVEL_TIME);
+                        break;
+                    }
+                }
+            }
         }
+
+        if (actionData.type === 'drop_skateboard') {
+            if (player.hasSkateboard) {
+                player.hasSkateboard = false;
+                const skate = gameState.skateboard;
+                skate.spawned = true;
+                skate.ownerId = null;
+                skate.x = player.x;
+                skate.y = player.y;
+            }
+        }
+
         if (actionData.type === 'interact') {
             if (!player.hasSkateboard && gameState.skateboard && gameState.skateboard.spawned && !gameState.skateboard.ownerId) {
                 const skate = gameState.skateboard;
                 const dx = (player.x + player.width / 2) - (skate.x + skate.width / 2);
                 const dy = (player.y + player.height / 2) - (skate.y + skate.height / 2);
                 const distance = Math.sqrt(dx * dx + dy * dy);
-=======
-socket.on('playerAction', (actionData) => {
-    const player = gameState.players[socket.id];
-    if (!player) return;
->>>>>>> 4ea81ec2aaee5dd9ca5d23fc30f778e89bff4a1a
 
-    if (actionData.type === 'primary_action') {
-        if (player.activeAbility === 'archer' && player.arrowAmmo > 0) {
-            player.arrowAmmo--;
-            gameState.arrows.push({
-                id: nextArrowId++,
-                x: player.x + player.width / 2,
-                y: player.y + player.height / 2,
-                width: 10, height: 10, color: 'red',
-                angle: player.rotation,
-                ownerId: player.id,
-                hasHit: false
-            });
-        }
-    }
-
-    if (actionData.type === 'ability') {
-        if (player.activeAbility === 'chameleon' && player.camouflageAvailable) {
-            player.isCamouflaged = true;
-            player.camouflageAvailable = false;
-            setTimeout(() => {
-                if (gameState.players[socket.id]) player.camouflageAvailable = true;
-            }, CAMOUFLAGE_COOLDOWN);
-        }
-        if (player.activeAbility === 'athlete' && player.sprintAvailable) {
-            player.isSprinting = true;
-            player.sprintAvailable = false;
-            const originalSpeed = player.speed;
-            player.speed *= 2;
-            setTimeout(() => {
-                if (gameState.players[socket.id]) {
-                    player.isSprinting = false;
-                    player.speed = originalSpeed;
+                if (distance < 100) {
+                    player.hasSkateboard = true;
+                    skate.ownerId = player.id;
+                    skate.spawned = false;
+                    return;
                 }
-            }, SPRINT_DURATION);
-            setTimeout(() => {
-                if (gameState.players[socket.id]) player.sprintAvailable = true;
-            }, SPRINT_COOLDOWN);
-        }
-        if (player.activeAbility === 'ant' && player.antAvailable) {
-            player.antAvailable = false;
-            player.isAnt = true;
-            const originalWidth = player.width;
-            const originalHeight = player.height;
-            const originalSpeed = player.speed;
-            player.width *= ANT_SIZE_FACTOR;
-            player.height *= ANT_SIZE_FACTOR;
-            player.speed *= ANT_SPEED_FACTOR;
-            setTimeout(() => {
-                if (gameState.players[socket.id]) {
-                    player.isAnt = false;
-                    player.width = originalWidth;
-                    player.height = originalHeight;
-                    player.speed = originalSpeed;
-                }
-            }, ANT_TRANSFORMATION_DURATION);
-            setTimeout(() => {
-                if (gameState.players[socket.id]) player.antAvailable = true;
-            }, ANT_COOLDOWN);
-        }
-        if (player.activeAbility === 'spy' && player.spyUsesLeft > 0 && !player.spyCooldown && !player.isSpying) {
-            player.isSpying = true;
-            player.spyUsesLeft--;
-            player.spyCooldown = true;
-            setTimeout(() => {
-                if (gameState.players[socket.id]) {
-                    player.isSpying = false;
-                }
-            }, SPY_DURATION);
-            setTimeout(() => {
-                if (gameState.players[socket.id]) {
-                    player.spyCooldown = false;
-                }
-            }, SPY_COOLDOWN);
-        }
-    }
-    
-    if (actionData.type === 'drop_skateboard') {
-        if (player.hasSkateboard) {
-            player.hasSkateboard = false;
-            const skate = gameState.skateboard;
-            skate.spawned = true;
-            skate.ownerId = null;
-            skate.x = player.x;
-            skate.y = player.y;
-        }
-    }
-
-<<<<<<< HEAD
+            }
             if (player.activeAbility === 'engineer' && !player.engineerAbilityUsed && !player.isInDuct) {
                 for (let i = 0; i < gameState.ducts.length; i++) {
-                    // isColliding deveria ser implementado conforme sua lógica
                     if (isColliding(player.hitbox, gameState.ducts[i])) {
                         player.isInDuct = true;
                         player.engineerAbilityUsed = true;
@@ -913,42 +527,6 @@ socket.on('playerAction', (actionData) => {
             }
         }
     });
-=======
-    if (actionData.type === 'interact') {
-        if (!player.hasSkateboard && gameState.skateboard && gameState.skateboard.spawned && !gameState.skateboard.ownerId) {
-            const skate = gameState.skateboard;
-            const dx = (player.x + player.width / 2) - (skate.x + skate.width / 2);
-            const dy = (player.y + player.height / 2) - (skate.y + skate.height / 2);
-            const distance = Math.sqrt(dx * dx + dy * dy);
-
-            if (distance < 100) {
-                player.hasSkateboard = true;
-                skate.ownerId = player.id;
-                skate.spawned = false;
-                return;
-            }
-        }
-
-        if (player.activeAbility === 'engineer' && !player.engineerAbilityUsed && !player.isInDuct) {
-            for (let i = 0; i < gameState.ducts.length; i++) {
-                if (isColliding(player.hitbox, gameState.ducts[i])) {
-                    player.isInDuct = true;
-                    player.engineerAbilityUsed = true;
-                    const exitDuct = gameState.ducts[(i + 1) % gameState.ducts.length];
-                    setTimeout(() => {
-                        if (gameState.players[socket.id]) {
-                            player.x = exitDuct.x + exitDuct.width / 2 - player.width / 2;
-                            player.y = exitDuct.y + exitDuct.height / 2 - player.height / 2;
-                            player.isInDuct = false;
-                        }
-                    }, DUCT_TRAVEL_TIME);
-                    break;
-                }
-            }
-        }
-    }
-});
->>>>>>> 4ea81ec2aaee5dd9ca5d23fc30f778e89bff4a1a
 
     socket.on('sendMessage', (text) => {
         const player = gameState.players[socket.id];
@@ -1026,13 +604,7 @@ socket.on('playerAction', (actionData) => {
             if (player.activeAbility !== ' ') {
                 gameState.takenAbilities = gameState.takenAbilities.filter(ability => ability !== player.activeAbility);
             }
-<<<<<<< HEAD
             if (player.hasSkateboard) spawnSkateboard();
-=======
-            if (player.hasSkateboard) {
-                spawnSkateboard();
-            }
->>>>>>> 4ea81ec2aaee5dd9ca5d23fc30f778e89bff4a1a
         }
         delete gameState.players[socket.id];
     });
