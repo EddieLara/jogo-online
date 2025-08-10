@@ -126,59 +126,7 @@ const skateboardSprite = loadImage('Sprites/Skateboard.png');
     window.addEventListener('resize', resizeCanvas);
 })();
 
-<<<<<<< HEAD
 // --------- Input ---------
-=======
-const socket = io();
-
-function loadImage(src) {
-    const img = new Image();
-    img.src = src;
-    return img;
-}
-const human = loadImage('Sprites/Human.png');
-const zombie = loadImage('Sprites/Zombie.png');
-const box = loadImage('Sprites/Box.png');
-const grass = loadImage('Sprites/Grass.png');
-const street = loadImage('Sprites/Street.png');
-const sand = loadImage('Sprites/Sand.png');
-const sea = loadImage('Sprites/Sea.png');
-const sunshade = loadImage('Sprites/Sunshade.png');
-const sunshadeII = loadImage('Sprites/SunshadeII.png');
-const sunshadeIII = loadImage('Sprites/SunshadeII.png');
-const ductSprite = loadImage('Sprites/Duct.png');
-const chest = loadImage('Sprites/Chest.png');
-const floors = loadImage('Sprites/Floor.png');
-const garageFloor = loadImage('Sprites/garageFloor.png');
-const ant = loadImage('Sprites/Ant.png');
-const smallBed = loadImage('Sprites/smallBed.png');
-const smallTable = loadImage('Sprites/smallTable.png');
-const bigTable = loadImage('Sprites/bigTable.png');
-const car = loadImage('Sprites/Car.png');
-const skateboardSprite = loadImage('Sprites/Skateboard.png');
-let myId = null;
-let gameState = { players: {}, arrows: [], timeLeft: 120, startTime: 60, gamePhase: 'waiting', abilityCosts: {} };
-const movement = { up: false, down: false, left: false, right: false };
-let mouse = { x: 0, y: 0 };
-let isMenuOpen = false;
-let activeMenuTab = 'abilities';
-const chatInput = document.getElementById('chatInput');
-let isChatting = false;
-let chatMessages = [];
-const MAX_MESSAGES = 7;
-socket.on('connect', () => {
-    myId = socket.id;
-});
-socket.on('gameStateUpdate', (serverState) => {
-    gameState = serverState;
-});
-socket.on('newMessage', (message) => {
-    chatMessages.push(message);
-    if (chatMessages.length > MAX_MESSAGES) {
-        chatMessages.shift();
-    }
-});
->>>>>>> 4ea81ec2aaee5dd9ca5d23fc30f778e89bff4a1a
 window.addEventListener('keydown', function (event) {
     const key = event.key.toLowerCase();
     const me = gameState.players[myId];
@@ -200,15 +148,7 @@ window.addEventListener('keydown', function (event) {
         chatInput.blur();
     }
     chatInput.onfocus = () => { isChatting = true; };
-<<<<<<< HEAD
     chatInput.onblur = () => { isChatting = false; chatInput.style.display = 'none'; };
-    if (key === 'b') isMenuOpen = !isMenuOpen;
-    if (isMenuOpen || isChatting) return;
-=======
-    chatInput.onblur = () => {
-        isChatting = false;
-        chatInput.style.display = 'none';
-    };
     if (key === 'b') {
         if (me && me.role !== 'zombie') {
             isMenuOpen = !isMenuOpen;
@@ -217,7 +157,6 @@ window.addEventListener('keydown', function (event) {
     if (isMenuOpen || isChatting) {
         return;
     }
->>>>>>> 4ea81ec2aaee5dd9ca5d23fc30f778e89bff4a1a
     switch (key) {
         case 'w': case 'arrowup': movement.up = true; break;
         case 's': case 'arrowdown': movement.down = true; break;
@@ -284,7 +223,6 @@ canvas.addEventListener('mousedown', function (event) {
     }
 });
 
-<<<<<<< HEAD
 function isClickInside(pos, rect) {
     return pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height;
 }
@@ -297,7 +235,7 @@ function getPlayerAngle(player) {
     const dy = mouse.y - cy;
     return Math.atan2(dy, dx);
 }
-function getFunctionsTabRect() {
+function getAbilitiesTabRect() {
     const mX = (canvas.width - 1500) / 2;
     const mY = (canvas.height - 900) / 2;
     return { x: mX + 10, y: mY + 10, width: 200, height: 60 };
@@ -334,7 +272,7 @@ function getSpyButtonRect() {
 
 // --------- Ranking (PÓDIO) ---------
 function drawPodiumRanking() {
-    // ranking: top 10 jogadores online, por moedas (coins)
+// ranking: top 10 jogadores online, por moedas (coins)
     let sorted = Object.values(gameState.players)
         .filter(p => p && typeof p.coins === "number")
         .sort((a, b) => b.coins - a.coins)
@@ -407,18 +345,18 @@ function drawMenu() {
     ctx.strokeStyle = '#000000ff';
     ctx.lineWidth = 5;
     ctx.strokeRect(menuX, menuY, menuWidth, menuHeight);
-    const functionsTabBtn = getFunctionsTabRect();
+    const abilitiesTabBtn = getAbilitiesTabRect();
     const itemsTabBtn = getItemsTabRect();
-    ctx.fillStyle = activeMenuTab === 'functions' ? '#000000ff' : '#444';
-    ctx.fillRect(functionsTabBtn.x, functionsTabBtn.y, functionsTabBtn.width, functionsTabBtn.height);
+    ctx.fillStyle = activeMenuTab === 'abilities' ? '#000000ff' : '#444';
+    ctx.fillRect(abilitiesTabBtn.x, abilitiesTabBtn.y, abilitiesTabBtn.width, abilitiesTabBtn.height);
     ctx.fillStyle = activeMenuTab === 'items' ? '#000000ff' : '#444';
     ctx.fillRect(itemsTabBtn.x, itemsTabBtn.y, itemsTabBtn.width, itemsTabBtn.height);
     ctx.fillStyle = 'white';
     ctx.font = '30px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('HABILIDADES', functionsTabBtn.x + functionsTabBtn.width / 2, functionsTabBtn.y + 40);
+    ctx.fillText('HABILIDADES', abilitiesTabBtn.x + abilitiesTabBtn.width / 2, abilitiesTabBtn.y + 40);
     ctx.fillText('ITENS', itemsTabBtn.x + itemsTabBtn.width / 2, itemsTabBtn.y + 40);
-    if (activeMenuTab === 'functions') {
+    if (activeMenuTab === 'abilities') {
         ctx.font = '50px Arial';
         ctx.fillText('ESCOLHA UMA HABILIDADE', canvas.width / 2, menuY + 140);
         if (me.activeAbility === ' ') {
@@ -466,8 +404,7 @@ function drawMenu() {
 }
 
 // --------- Render ---------
-=======
->>>>>>> 4ea81ec2aaee5dd9ca5d23fc30f778e89bff4a1a
+
 function draw() {
     if (!myId || !gameState.players || !gameState.players[myId]) {
         ctx.fillStyle = 'black';
@@ -680,167 +617,6 @@ function draw() {
         drawMenu();
     }
 }
-<<<<<<< HEAD
-=======
-function drawChat() {
-    if (chatMessages.length === 0) return;
-    ctx.save();
-    const chatBoxX = 10;
-    const chatBoxY = canvas.height - 200 - (chatMessages.length * 25);
-    const chatBoxWidth = 500;
-    const chatBoxHeight = (chatMessages.length * 25) + 10;
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-    ctx.fillRect(chatBoxX, chatBoxY, chatBoxWidth, chatBoxHeight);
-    ctx.font = '18px Arial';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    chatMessages.forEach((msg, index) => {
-        ctx.fillStyle = msg.name === 'Server' ? 'yellow' : 'gold';
-        ctx.fillText(msg.name + ':', chatBoxX + 10, chatBoxY + 5 + (index * 25));
-        ctx.fillStyle = 'white';
-        const nameWidth = ctx.measureText(msg.name + ': ').width;
-        ctx.fillText(msg.text, chatBoxX + 10 + nameWidth, chatBoxY + 5 + (index * 25));
-    });
-    ctx.restore();
-}
-
-function getAbilitiesLayout() {
-    const abilities = [
-        { text: 'CHAMELEON', ability: 'chameleon', description: 'Turn into a box to hide.' },
-        { text: 'ATHLETE', ability: 'athlete', description: 'Sprint for a short duration.' },
-        { text: 'ARCHER', ability: 'archer', description: 'Shoot arrows to slow enemies.' },
-        { text: 'ENGINEER', ability: 'engineer', description: 'Travel instantly between ducts.' },
-        { text: 'ANT', ability: 'ant', description: 'Shrink to a tiny size.' },
-        { text: 'SPY', ability: 'spy', description: 'Disguise as a zombie.' }
-    ];
-
-    const menuWidth = 1500, menuHeight = 900;
-    const menuX = (canvas.width - menuWidth) / 2, menuY = (canvas.height - menuHeight) / 2;
-
-    const cols = 3;
-    const btnWidth = 400;
-    const btnHeight = 150;
-    const gap = 50;
-    const totalGridWidth = cols * btnWidth + (cols - 1) * gap;
-    const startX = menuX + (menuWidth - totalGridWidth) / 2;
-    const startY = menuY + 220;
-
-    const buttons = abilities.map((ability, index) => {
-        const row = Math.floor(index / cols);
-        const col = index % cols;
-        return {
-            ...ability,
-            rect: {
-                x: startX + col * (btnWidth + gap),
-                y: startY + row * (btnHeight + gap),
-                width: btnWidth,
-                height: btnHeight
-            }
-        };
-    });
-    return { buttons };
-}
-
-function drawMenu() {
-    const me = gameState.players[myId];
-    if (!me) return;
-    const menuWidth = 1500, menuHeight = 900;
-    const menuX = (canvas.width - menuWidth) / 2, menuY = (canvas.height - menuHeight) / 2;
-    ctx.fillStyle = '#4d4c4cff';
-    ctx.fillRect(menuX, menuY, menuWidth, menuHeight);
-    ctx.strokeStyle = '#000000ff';
-    ctx.lineWidth = 5;
-    ctx.strokeRect(menuX, menuY, menuWidth, menuHeight);
-    const abilitiesTabBtn = getAbilitiesTabRect();
-    const itemsTabBtn = getItemsTabRect();
-    ctx.fillStyle = activeMenuTab === 'abilities' ? '#000000ff' : '#444';
-    ctx.fillRect(abilitiesTabBtn.x, abilitiesTabBtn.y, abilitiesTabBtn.width, abilitiesTabBtn.height);
-    ctx.fillStyle = activeMenuTab === 'items' ? '#000000ff' : '#444';
-    ctx.fillRect(itemsTabBtn.x, itemsTabBtn.y, itemsTabBtn.width, itemsTabBtn.height);
-    ctx.fillStyle = 'white';
-    ctx.font = '30px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('ABILITIES', abilitiesTabBtn.x + abilitiesTabBtn.width / 2, abilitiesTabBtn.y + 40);
-    ctx.fillText('ITEMS', itemsTabBtn.x + itemsTabBtn.width / 2, itemsTabBtn.y + 40);
-
-    if (activeMenuTab === 'abilities') {
-        ctx.font = '50px Arial';
-        ctx.fillText('CHOOSE AN ABILITY', canvas.width / 2, menuY + 140);
-        if (me.activeAbility === ' ') {
-            const { buttons } = getAbilitiesLayout();
-            buttons.forEach(btn => {
-                const isTaken = gameState.takenAbilities.includes(btn.ability);
-                const cost = gameState.abilityCosts[btn.ability] || 0;
-                const canAfford = me.coins >= cost;
-                ctx.fillStyle = isTaken ? '#333' : (canAfford ? '#282828' : '#1a1a1a');
-                ctx.fillRect(btn.rect.x, btn.rect.y, btn.rect.width, btn.rect.height);
-                ctx.strokeStyle = isTaken ? '#555' : (canAfford ? 'white' : '#666');
-                ctx.lineWidth = 3;
-                ctx.strokeRect(btn.rect.x, btn.rect.y, btn.rect.width, btn.rect.height);
-
-                ctx.textAlign = 'center';
-                ctx.font = '40px Arial';
-                ctx.fillStyle = isTaken ? '#888' : (canAfford ? 'white' : '#999');
-                ctx.fillText(btn.text, btn.rect.x + btn.rect.width / 2, btn.rect.y + 45);
-
-                ctx.font = '20px Arial';
-                ctx.fillStyle = isTaken ? '#777' : (canAfford ? '#ccc' : '#888');
-                ctx.fillText(btn.description, btn.rect.x + btn.rect.width / 2, btn.rect.y + 80);
-
-                ctx.font = '30px Arial';
-                ctx.fillStyle = canAfford ? 'gold' : 'red';
-                const costText = `🪙 ${cost}`;
-                ctx.textAlign = 'right';
-                ctx.fillText(costText, btn.rect.x + btn.rect.width - 20, btn.rect.y + btn.rect.height - 15);
-                
-                if (isTaken) {
-                    ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
-                    ctx.textAlign = 'center';
-                    ctx.font = 'bold 30px Arial';
-                    ctx.fillText('TAKEN', btn.rect.x + btn.rect.width / 2, btn.rect.y + 115);
-                }
-            });
-        } else {
-            ctx.font = '40px Arial';
-            ctx.fillStyle = 'grey';
-            ctx.textAlign = 'center';
-            ctx.fillText('ABILITY ALREADY CHOSEN!', canvas.width / 2, canvas.height / 2);
-        }
-    } else if (activeMenuTab === 'items') {
-        ctx.font = '50px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('SHOP', canvas.width / 2, menuY + 140);
-        ctx.font = '30px Arial';
-        ctx.fillStyle = 'grey';
-        ctx.fillText(me.inventory.length === 0 ? 'Inventory empty' : me.inventory.join(', '), canvas.width / 2, canvas.height / 2);
-    }
-    ctx.font = '20px Arial';
-    ctx.fillStyle = 'white';
-    ctx.textAlign = 'center';
-    ctx.fillText('PRESS "B" TO CLOSE', canvas.width / 2 + 580, menuY + menuHeight - 20);
-}
-function isClickInside(pos, rect) {
-    return pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height;
-}
-function getPlayerAngle(player) {
-    if (!player) return 0;
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
-    const dx = mouse.x - cx;
-    const dy = mouse.y - cy;
-    return Math.atan2(dy, dx);
-}
-function getAbilitiesTabRect() {
-    const mX = (canvas.width - 1500) / 2;
-    const mY = (canvas.height - 900) / 2;
-    return { x: mX + 10, y: mY + 10, width: 200, height: 60 };
-}
-function getItemsTabRect() {
-    const mX = (canvas.width - 1500) / 2;
-    const mY = (canvas.height - 900) / 2;
-    return { x: mX + 220, y: mY + 10, width: 200, height: 60 };
-}
->>>>>>> 4ea81ec2aaee5dd9ca5d23fc30f778e89bff4a1a
 
 function gameLoop() {
     if (myId && gameState.players[myId]) {
