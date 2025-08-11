@@ -126,9 +126,7 @@ const skateboardSprite = loadImage('Sprites/Skateboard.png');
     window.addEventListener('resize', resizeCanvas);
 })();
 
-<<<<<<< HEAD
 // --------- Input ---------
-=======
 const socket = io();
 
 function loadImage(src) {
@@ -178,7 +176,7 @@ socket.on('newMessage', (message) => {
         chatMessages.shift();
     }
 });
->>>>>>> 4ea81ec2aaee5dd9ca5d23fc30f778e89bff4a1a
+
 window.addEventListener('keydown', function (event) {
     const key = event.key.toLowerCase();
     const me = gameState.players[myId];
@@ -200,11 +198,11 @@ window.addEventListener('keydown', function (event) {
         chatInput.blur();
     }
     chatInput.onfocus = () => { isChatting = true; };
-<<<<<<< HEAD
+
     chatInput.onblur = () => { isChatting = false; chatInput.style.display = 'none'; };
     if (key === 'b') isMenuOpen = !isMenuOpen;
     if (isMenuOpen || isChatting) return;
-=======
+
     chatInput.onblur = () => {
         isChatting = false;
         chatInput.style.display = 'none';
@@ -217,7 +215,7 @@ window.addEventListener('keydown', function (event) {
     if (isMenuOpen || isChatting) {
         return;
     }
->>>>>>> 4ea81ec2aaee5dd9ca5d23fc30f778e89bff4a1a
+
     switch (key) {
         case 'w': case 'arrowup': movement.up = true; break;
         case 's': case 'arrowdown': movement.down = true; break;
@@ -284,7 +282,7 @@ canvas.addEventListener('mousedown', function (event) {
     }
 });
 
-<<<<<<< HEAD
+
 function isClickInside(pos, rect) {
     return pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height;
 }
@@ -466,8 +464,7 @@ function drawMenu() {
 }
 
 // --------- Render ---------
-=======
->>>>>>> 4ea81ec2aaee5dd9ca5d23fc30f778e89bff4a1a
+
 function draw() {
     if (!myId || !gameState.players || !gameState.players[myId]) {
         ctx.fillStyle = 'black';
@@ -680,8 +677,7 @@ function draw() {
         drawMenu();
     }
 }
-<<<<<<< HEAD
-=======
+
 function drawChat() {
     if (chatMessages.length === 0) return;
     ctx.save();
@@ -840,7 +836,6 @@ function getItemsTabRect() {
     const mY = (canvas.height - 900) / 2;
     return { x: mX + 220, y: mY + 10, width: 200, height: 60 };
 }
->>>>>>> 4ea81ec2aaee5dd9ca5d23fc30f778e89bff4a1a
 
 function gameLoop() {
     if (myId && gameState.players[myId]) {
@@ -851,4 +846,10 @@ function gameLoop() {
     draw();
     requestAnimationFrame(gameLoop);
 }
+patch-1
+
+
 gameLoop();
+
+gameLoop();
+main
