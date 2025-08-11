@@ -1,10 +1,19 @@
+// ======================
+// INFESTATION.IO - SERVIDOR
+// ======================
+
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
+const cors = require('cors');
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
-app.use(express.static(__dirname));
+
+app.use(cors());
+app.use(express.static(__dirname)); // serve index.html, game.js, Sprites, etc
+
+// ======= CONFIGURAÇÕES DO JOGO =========
 const PORT = process.env.PORT || 3000;
 const TICK_RATE = 1000 / 60;
 const WORLD_WIDTH = 6000;
@@ -14,6 +23,7 @@ const INITIAL_PLAYER_SPEED = 2;
 const MAX_PLAYER_SPEED = 5;
 const SPEED_PER_PIXEL_OF_GROWTH = 0.05;
 const GROWTH_AMOUNT = 0.2;
+const ZOMBIE_DECAY_AMOUNT = 0.25;
 const DUCT_TRAVEL_TIME = 1000 / 20;
 const CAMOUFLAGE_COOLDOWN = 45000;
 const SPRINT_COOLDOWN = 45000;
@@ -23,15 +33,20 @@ const ANT_COOLDOWN = 45000;
 const ANT_SIZE_FACTOR = 0.1;
 const ANT_SPEED_FACTOR = 0.7;
 const ARROW_SPEED = 20;
-const BOX_FRICTION = 0.90;
-const BOX_PUSH_FORCE = 0.10;
-const BOX_COLLISION_DAMPING = 0.90;
-const ANGULAR_FRICTION = 0.95;
+const ARROW_KNOCKBACK = 30;
+const ARROW_LIFESPAN_AFTER_HIT = 1000;
+const BOX_FRICTION = 0.94;
+const BOX_PUSH_FORCE = 0.15;
+const BOX_COLLISION_DAMPING = 0.80;
+const ANGULAR_FRICTION = 0.80;
 const TORQUE_FACTOR = 0.000008;
 const ZOMBIE_SPEED_BOOST = 1.15;
 const SPY_DURATION = 20000;
 const SPY_COOLDOWN = 45000;
 const ROUND_DURATION = 120;
+const SKATEBOARD_SPEED_BOOST = 7;
+const SKATEBOARD_WIDTH = 90;
+const SKATEBOARD_HEIGHT = 35;
 const ABILITY_COSTS = {
     chameleon: 20,
     athlete: 10,
@@ -40,7 +55,91 @@ const ABILITY_COSTS = {
     ant: 20,
     spy: 50
 };
+
+// ===== BANIMENTO & DEV =====
+const devEmails = [
+    "enzosantiagosrv1245@gmail.com",
+    "eddiemullerlara7@gmail.com"
+];
+let bannedPlayers = {}; // { id: { permanent: true, until: null, reason: "" }, ... }
+let bannedEmails = {};  // { email: { permanent: true, until: null, reason: "" }, ... }
+
+function isDev(email) {
+    return devEmails.includes(email);
+}
+function isBanned({ id, email }) {
+    if (id && bannedPlayers[id]) {
+        const ban = bannedPlayers[id];
+        if (ban.permanent) return true;
+        if (ban.until && Date.now() < ban.until) return true;
+        if (ban.until && Date.now() >= ban.until) {
+            delete bannedPlayers[id];
+            return false;
+        }
+        return false;
+    }
+    if (email && bannedEmails[email]) {
+        const ban = bannedEmails[email];
+        if (ban.permanent) return true;
+        if (ban.until && Date.now() < ban.until) return true;
+        if (ban.until && Date.now() >= ban.until) {
+            delete bannedEmails[email];
+            return false;
+        }
+        return false;
+    }
+    return false;
+}
+function banPlayer({ id, email }, options = { permanent: true, until: null, reason: "" }) {
+    if (id) bannedPlayers[id] = options;
+    if (email) bannedEmails[email] = options;
+}
+
+function parseCommand(text) {
+    // comandos de staff: /tp player, /ban player, /ban temp player 9 days
+    const tpRegex = /^\/tp\s+("?)([a-zA-Z0-9_-]+)"?/i;
+    const banRegex = /^\/ban\s+("?)([a-zA-Z0-9_-]+)"?/i;
+    const banTempRegex = /^\/ban\s+temp\s+("?)([a-zA-Z0-9_-]+)"?\s+(\d+)\s*(seconds?|minutes?|hours?|days?|weeks?|months?|years?)/i;
+    let match;
+    if ((match = text.match(tpRegex))) {
+        return { cmd: 'tp', playerName: match[2] };
+    }
+    if ((match = text.match(banRegex))) {
+        return { cmd: 'ban', playerName: match[2] };
+    }
+    if ((match = text.match(banTempRegex))) {
+        return {
+            cmd: 'ban_temp',
+            playerName: match[2],
+            amount: parseInt(match[3]),
+            unit: match[4]
+        };
+    }
+    return null;
+}
+function getPlayerByName(name) {
+    for (const id in gameState.players) {
+        if (gameState.players[id].name === name) {
+            return gameState.players[id];
+        }
+    }
+    return null;
+}
+
+// ===== ESTADO DO JOGO =====
 let gameState = {};
+let nextArrowId = 0;
+
+function spawnSkateboard() {
+    if (!gameState.skateboard) return;
+    const streetArea = { x: 3090, y: 0, width: 1000, height: 2000 };
+    gameState.skateboard.x = streetArea.x + Math.random() * (streetArea.width - SKATEBOARD_WIDTH);
+    gameState.skateboard.y = streetArea.y + Math.random() * (streetArea.height - SKATEBOARD_HEIGHT);
+    gameState.skateboard.spawned = true;
+    gameState.skateboard.ownerId = null;
+    console.log(`Skateboard spawned at ${gameState.skateboard.x.toFixed(0)}, ${gameState.skateboard.y.toFixed(0)}`);
+}
+
 function initializeGame() {
     gameState = {
         players: {},
@@ -50,7 +149,16 @@ function initializeGame() {
         gamePhase: 'waiting',
         startTime: 60,
         timeLeft: ROUND_DURATION,
+        skateboard: {
+            x: 0,
+            y: 0,
+            width: SKATEBOARD_WIDTH,
+            height: SKATEBOARD_HEIGHT,
+            spawned: false,
+            ownerId: null
+        },
         box: [
+            // Caixas Originais
             { x: 1000, y: 1500, width: 128, height: 128, vx: 0, vy: 0, rotation: 100, angularVelocity: 0 },
             { x: 2720, y: 1670, width: 128, height: 128, vx: 0, vy: 0, rotation: 200, angularVelocity: 0 },
             { x: 1050, y: 600, width: 128, height: 128, vx: 0, vy: 0, rotation: 120, angularVelocity: 0 },
@@ -61,14 +169,24 @@ function initializeGame() {
             { x: 2680, y: 290, width: 90, height: 90, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
             { x: 1400, y: 800, width: 56, height: 56, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
             { x: 1456, y: 800, width: 100, height: 100, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
-            { x: 1556, y: 800, width: 80, height: 80, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 }
+            { x: 1556, y: 800, width: 80, height: 80, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
+            // --- Novas Caixas Adicionadas ---
+            { x: 800, y: 300, width: 90, height: 90, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
+            { x: 1700, y: 700, width: 128, height: 128, vx: 0, vy: 0, rotation: 45, angularVelocity: 0 },
+            { x: 2300, y: 900, width: 80, height: 80, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
+            { x: 450, y: 950, width: 100, height: 100, vx: 0, vy: 0, rotation: 15, angularVelocity: 0 }
         ],
         furniture: [
+            // Móveis Originais
             { id: 'small_bed', x: 300, y: 400, width: 108, height: 200, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
             { id: 'small_bed', x: 1850, y: 400, width: 108, height: 200, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
             { id: 'small_table', x: 2500, y: 600, width: 288, height: 132, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
             { id: 'big_table', x: 500, y: 1400, width: 480, height: 240, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
-            { id: 'car', x: 2150, y: 1350, width: 502, height: 302, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 }
+            { id: 'car', x: 3150, y: 150, width: 502, height: 302, vx: 0, vy: 0, rotation: 180, angularVelocity: 0 },
+            // --- Novos Móveis Adicionados ---
+            { id: 'small_bed', x: 1000, y: 400, width: 108, height: 200, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 },
+            { id: 'small_table', x: 2100, y: 1400, width: 288, height: 132, vx: 0, vy: 0, rotation: 90, angularVelocity: 0 },
+            { id: 'small_table', x: 850, y: 900, width: 288, height: 132, vx: 0, vy: 0, rotation: 0, angularVelocity: 0 }
         ],
         chest: { x: 2890, y: 825, width: 200, height: 240 },
         ducts: [
@@ -86,6 +204,7 @@ function initializeGame() {
     buildWalls(gameState.house);
     buildWalls(gameState.garage);
 }
+
 function buildWalls(structure) {
     const s = structure;
     const wt = s.wallThickness;
@@ -115,15 +234,12 @@ function buildWalls(structure) {
         s.walls.push({ x: s.x + s.width - wt + 1200, y: s.y + 460, width: wt, height: 140 });
     }
 }
-function isColliding(rect1, rect2) {
-    if (!rect1 || !rect2) {
-        return false;
-    }
-    return rect1.x < rect2.x + rect2.width && rect1.x + rect1.width > rect2.x && rect1.y < rect2.y + rect2.height && rect1.y + rect1.height > rect2.y;
-}
-function createNewPlayer(socket) {
+
+// Função para criar novo player (com email e nome se vierem via auth)
+function createNewPlayer(socket, userInfo) {
+    let name = userInfo && userInfo.name ? userInfo.name : `Player${Math.floor(100 + Math.random() * 900)}`;
     gameState.players[socket.id] = {
-        name: `Player${Math.floor(100 + Math.random() * 900)}`,
+        name,
         id: socket.id,
         x: WORLD_WIDTH / 2 + 500,
         y: WORLD_HEIGHT / 2,
@@ -149,13 +265,17 @@ function createNewPlayer(socket) {
         isInDuct: false,
         footprintCooldown: 0,
         inventory: [],
+        hasSkateboard: false,
         input: {
             movement: { up: false, down: false, left: false, right: false },
             mouse: { x: 0, y: 0 },
             rotation: 0
-        }
+        },
+        email: userInfo && userInfo.email ? userInfo.email : (socket.handshake.auth && socket.handshake.auth.email ? socket.handshake.auth.email : null)
     };
 }
+<<<<<<< HEAD
+=======
 function getVertices(rect) {
     const vertices = [];
     const cx = rect.x + rect.width / 2;
@@ -228,6 +348,7 @@ function checkCollisionSAT(poly1, poly2) {
     }
     return mtv;
 }
+
 function updateGameState() {
     const allCollidables = [...gameState.box, ...gameState.furniture];
     for (let i = 0; i < allCollidables.length; i++) {
@@ -281,6 +402,7 @@ function updateGameState() {
         if (item1.y < 0) { item1.y = 0; item1.vy *= -0.5; }
         if (item1.y + item1.height > WORLD_HEIGHT) { item1.y = WORLD_HEIGHT - item1.height; item1.vy *= -0.5; }
     }
+
     for (const id in gameState.players) {
         const player = gameState.players[id];
         const hitboxWidth = player.width * 0.4;
@@ -291,7 +413,38 @@ function updateGameState() {
             x: player.x + (player.width - hitboxWidth) / 2,
             y: player.y + (player.height - hitboxHeight) / 2,
         };
-        if (player.input.movement.up || player.input.movement.down || player.input.movement.left || player.input.movement.right) {
+
+        if (player.hasSkateboard) {
+            if (player.activeAbility === 'chameleon' && player.isCamouflaged) {
+                player.isCamouflaged = false;
+            }
+            const originalX = player.x;
+            const originalY = player.y;
+            const skateSpeed = SKATEBOARD_SPEED_BOOST;
+            const angle = player.rotation;
+            
+            player.x += Math.cos(angle) * skateSpeed;
+            player.hitbox.x = player.x + (player.width - player.hitbox.width) / 2;
+            let collidedX = false;
+            for (const wall of [...gameState.house.walls, ...gameState.garage.walls]) { if (isColliding(player.hitbox, wall)) { collidedX = true; } }
+            if (isColliding(player.hitbox, gameState.chest)) { collidedX = true; }
+            if (player.x < 0 || player.x + player.width > WORLD_WIDTH) { collidedX = true; }
+            if (collidedX) {
+                player.x = originalX;
+                player.hitbox.x = player.x + (player.width - player.hitbox.width) / 2;
+            }
+
+            player.y += Math.sin(angle) * skateSpeed;
+            player.hitbox.y = player.y + (player.height - player.hitbox.height) / 2;
+            let collidedY = false;
+            for (const wall of [...gameState.house.walls, ...gameState.garage.walls]) { if (isColliding(player.hitbox, wall)) { collidedY = true; } }
+            if (isColliding(player.hitbox, gameState.chest)) { collidedY = true; }
+            if (player.y < 0 || player.y + player.height > WORLD_HEIGHT) { collidedY = true; }
+            if (collidedY) {
+                player.y = originalY;
+                player.hitbox.y = player.y + (player.height - player.hitbox.height) / 2;
+            }
+        } else if (player.input.movement.up || player.input.movement.down || player.input.movement.left || player.input.movement.right) {
             if (player.activeAbility === 'chameleon' && player.isCamouflaged) {
                 player.isCamouflaged = false;
             }
@@ -331,16 +484,35 @@ function updateGameState() {
                 break;
             }
         }
-        const playerPoly = { ...player.hitbox, rotation: 0 };
-        for (const item of allCollidables) {
+       const playerPoly = { ...player.hitbox, rotation: 0 };
+       for (const item of allCollidables) {
             const mtv = checkCollisionSAT(playerPoly, item);
             if (mtv) {
+                if (player.hasSkateboard) {
+                    player.x -= mtv.x;
+                    player.y -= mtv.y;
+                    continue;
+                }
+
+                player.x -= mtv.x;
+                player.y -= mtv.y;
+
                 let pushDirectionX = 0;
                 let pushDirectionY = 0;
                 if (player.input.movement.up) { pushDirectionY -= 1; }
                 if (player.input.movement.down) { pushDirectionY += 1; }
                 if (player.input.movement.left) { pushDirectionX -= 1; }
                 if (player.input.movement.right) { pushDirectionX += 1; }
+                
+                const isPushing = Math.sqrt(pushDirectionX * pushDirectionX + pushDirectionY * pushDirectionY) > 0;
+
+                if (isPushing) {
+                    const contactVectorX = (player.x + player.width / 2) - (item.x + item.width / 2);
+                    const contactVectorY = (player.y + player.height / 2) - (item.y + item.height / 2);
+                    const torque = (contactVectorX * pushDirectionY - contactVectorY * pushDirectionX) * TORQUE_FACTOR;
+                    item.angularVelocity += torque;
+                }
+
                 const pushForceX = pushDirectionX * BOX_PUSH_FORCE;
                 const pushForceY = pushDirectionY * BOX_PUSH_FORCE;
                 const predictedItem = {
@@ -348,6 +520,7 @@ function updateGameState() {
                     x: item.x + item.vx + pushForceX,
                     y: item.y + item.vy + pushForceY
                 };
+
                 let wouldCollideWithWall = false;
                 const staticObstacles = [...gameState.house.walls, ...gameState.garage.walls, gameState.chest];
                 for (const obstacle of staticObstacles) {
@@ -356,24 +529,13 @@ function updateGameState() {
                         break;
                     }
                 }
-                if (wouldCollideWithWall) {
-                    player.x -= mtv.x;
-                    player.y -= mtv.y;
-                } else {
-                    player.x -= mtv.x;
-                    player.y -= mtv.y;
-                    const len = Math.sqrt(pushDirectionX * pushDirectionX + pushDirectionY * pushDirectionY);
-                    if (len > 0) {
-                        item.vx += pushForceX;
-                        item.vy += pushForceY;
-                        const contactVectorX = (player.x + player.width / 2) - (item.x + item.width / 2);
-                        const contactVectorY = (player.y + player.height / 2) - (item.y + item.height / 2);
-                        const torque = (contactVectorX * pushDirectionY - contactVectorY * pushDirectionX) * TORQUE_FACTOR;
-                        item.angularVelocity += torque;
-                    }
+
+                if (!wouldCollideWithWall && isPushing) {
+                    item.vx += pushForceX;
+                    item.vy += pushForceY;
                 }
             }
-        }
+       }
         const allWalls = [...gameState.house.walls, ...gameState.garage.walls];
         for (const wall of allWalls) {
             playerPoly.x = player.x + (player.width - player.hitbox.width) / 2;
@@ -385,6 +547,7 @@ function updateGameState() {
             }
         }
     }
+
     if (gameState.gamePhase === 'running') {
         const players = gameState.players;
         const playerIds = Object.keys(players);
@@ -398,13 +561,22 @@ function updateGameState() {
                     if (id1 === id2) continue;
                     const player2 = players[id2];
                     if ((player2.role === 'human' || player2.isSpying) && isColliding(player1.hitbox, player2.hitbox)) {
+                        
+                        if (player2.hasSkateboard) {
+                            player2.hasSkateboard = false;
+                            gameState.skateboard.spawned = true;
+                            gameState.skateboard.ownerId = null;
+                            gameState.skateboard.x = player2.x;
+                            gameState.skateboard.y = player2.y + player2.height;
+                        }
+
                         if (player2.isSpying) {
                             player2.isSpying = false;
                         }
                         player2.role = 'zombie';
                         player2.speed *= ZOMBIE_SPEED_BOOST;
-                        console.log(`${player2.name} foi infectado!`);
-                        io.emit('newMessage', { name: 'Servidor', text: `${player2.name} foi infectado!` });
+                        console.log(`${player2.name} has been infected!`);
+                        io.emit('newMessage', { name: 'Server', text: `${player2.name} has been infected!` });
                     }
                 }
             }
@@ -416,11 +588,29 @@ function updateGameState() {
                 }
             }
             if (humanCount === 0 && playerIds.length > 0) {
-                console.log("Todos os humanos foram infectados! Reiniciando a partida.");
-                io.emit('newMessage', { name: 'Servidor', text: 'Os Zumbis venceram!' });
+                console.log("All humans have been infected! Restarting the round.");
+                io.emit('newMessage', { name: 'Server', text: 'The Zombies have won!' });
+
+                const skateWasOnGround = gameState.skateboard.spawned;
+                let skateOwnerId = null;
+                for (const id in gameState.players) {
+                    if (gameState.players[id].hasSkateboard) {
+                        skateOwnerId = id;
+                        break;
+                    }
+                }
+
                 const currentPlayers = gameState.players;
                 initializeGame();
                 gameState.players = currentPlayers;
+
+                if (skateWasOnGround || !skateOwnerId) {
+                    spawnSkateboard();
+                } else {
+                    gameState.skateboard.ownerId = skateOwnerId;
+                    gameState.skateboard.spawned = false;
+                }
+                
                 for (const id in gameState.players) {
                     const player = gameState.players[id];
                     player.x = WORLD_WIDTH / 2 + 500;
@@ -429,21 +619,84 @@ function updateGameState() {
                     player.activeAbility = ' ';
                     player.width = INITIAL_PLAYER_SIZE;
                     player.height = INITIAL_PLAYER_SIZE * 1.25;
+                    player.speed = INITIAL_PLAYER_SPEED;
+                    if (id !== skateOwnerId) {
+                        player.hasSkateboard = false;
+                    }
                 }
             }
         }
     }
-    gameState.arrows.forEach((arrow, index) => {
+    for (let i = gameState.arrows.length - 1; i >= 0; i--) {
+        const arrow = gameState.arrows[i];
+
+        if (arrow.hasHit) {
+            continue;
+        }
+
         arrow.x += Math.cos(arrow.angle) * ARROW_SPEED;
         arrow.y += Math.sin(arrow.angle) * ARROW_SPEED;
-        if (arrow.x < 0 || arrow.x > WORLD_WIDTH || arrow.y < 0 || arrow.y > WORLD_HEIGHT) {
-            gameState.arrows.splice(index, 1);
+
+        let hitDetected = false;
+
+        for (const playerId in gameState.players) {
+            const player = gameState.players[playerId];
+            if (arrow.ownerId === playerId || !player.hitbox || player.isInDuct) {
+                continue;
+            }
+
+            const arrowHitbox = { x: arrow.x, y: arrow.y, width: arrow.width, height: arrow.height };
+
+            if (isColliding(arrowHitbox, player.hitbox)) {
+                player.x += Math.cos(arrow.angle) * ARROW_KNOCKBACK;
+                player.y += Math.sin(arrow.angle) * ARROW_KNOCKBACK;
+                
+                arrow.hasHit = true;
+                hitDetected = true;
+
+                const arrowIdToRemove = arrow.id;
+                setTimeout(() => {
+                    const index = gameState.arrows.findIndex(a => a.id === arrowIdToRemove);
+                    if (index !== -1) {
+                        gameState.arrows.splice(index, 1);
+                    }
+                }, ARROW_LIFESPAN_AFTER_HIT);
+
+                break;
+            }
         }
-    });
+
+        if (!hitDetected) {
+            if (arrow.x < 0 || arrow.x > WORLD_WIDTH || arrow.y < 0 || arrow.y > WORLD_HEIGHT) {
+                gameState.arrows.splice(i, 1);
+            }
+        }
+    }
 }
+>>>>>>> 4ea81ec2aaee5dd9ca5d23fc30f778e89bff4a1a
+
+// ================= SOCKET.IO ===================
 io.on('connection', (socket) => {
+<<<<<<< HEAD
+    // Usuário pode passar email/nome via socket.handshake.auth
+    const userInfo = socket.handshake.auth && socket.handshake.auth.userInfo
+        ? socket.handshake.auth.userInfo
+        : { email: socket.handshake.auth && socket.handshake.auth.email, name: null };
+
+    // Ban check
+    if (isBanned({ id: socket.id, email: userInfo.email })) {
+        socket.emit('banMessage', { reason: "Você foi banido do servidor.", color: "red" });
+        socket.disconnect();
+        return;
+    }
+
     console.log('Novo jogador conectado:', socket.id);
+    createNewPlayer(socket, userInfo);
+
+=======
+    console.log('New player connected:', socket.id);
     createNewPlayer(socket);
+>>>>>>> 4ea81ec2aaee5dd9ca5d23fc30f778e89bff4a1a
     socket.on('playerInput', (inputData) => {
         const player = gameState.players[socket.id];
         if (player) {
@@ -451,21 +704,20 @@ io.on('connection', (socket) => {
             player.rotation = inputData.rotation;
         }
     });
+
     socket.on('chooseAbility', (ability) => {
         const player = gameState.players[socket.id];
         const cost = ABILITY_COSTS[ability];
         if (player && player.activeAbility === ' ' && cost !== undefined && player.coins >= cost) {
-            if (gameState.takenAbilities.includes(ability)) {
-                return;
-            }
+            if (gameState.takenAbilities.includes(ability)) return;
             player.coins -= cost;
             player.activeAbility = ability;
             gameState.takenAbilities.push(ability);
-            if (ability === 'archer') {
-                player.arrowAmmo = 100;
-            }
+            if (ability === 'archer') player.arrowAmmo = 100;
         }
     });
+<<<<<<< HEAD
+
     socket.on('playerAction', (actionData) => {
         const player = gameState.players[socket.id];
         if (!player) return;
@@ -542,8 +794,108 @@ io.on('connection', (socket) => {
             }
         }
         if (actionData.type === 'interact') {
+            if (!player.hasSkateboard && gameState.skateboard && gameState.skateboard.spawned && !gameState.skateboard.ownerId) {
+                const skate = gameState.skateboard;
+                const dx = (player.x + player.width / 2) - (skate.x + skate.width / 2);
+                const dy = (player.y + player.height / 2) - (skate.y + skate.height / 2);
+                const distance = Math.sqrt(dx * dx + dy * dy);
+=======
+socket.on('playerAction', (actionData) => {
+    const player = gameState.players[socket.id];
+    if (!player) return;
+>>>>>>> 4ea81ec2aaee5dd9ca5d23fc30f778e89bff4a1a
+
+    if (actionData.type === 'primary_action') {
+        if (player.activeAbility === 'archer' && player.arrowAmmo > 0) {
+            player.arrowAmmo--;
+            gameState.arrows.push({
+                id: nextArrowId++,
+                x: player.x + player.width / 2,
+                y: player.y + player.height / 2,
+                width: 10, height: 10, color: 'red',
+                angle: player.rotation,
+                ownerId: player.id,
+                hasHit: false
+            });
+        }
+    }
+
+    if (actionData.type === 'ability') {
+        if (player.activeAbility === 'chameleon' && player.camouflageAvailable) {
+            player.isCamouflaged = true;
+            player.camouflageAvailable = false;
+            setTimeout(() => {
+                if (gameState.players[socket.id]) player.camouflageAvailable = true;
+            }, CAMOUFLAGE_COOLDOWN);
+        }
+        if (player.activeAbility === 'athlete' && player.sprintAvailable) {
+            player.isSprinting = true;
+            player.sprintAvailable = false;
+            const originalSpeed = player.speed;
+            player.speed *= 2;
+            setTimeout(() => {
+                if (gameState.players[socket.id]) {
+                    player.isSprinting = false;
+                    player.speed = originalSpeed;
+                }
+            }, SPRINT_DURATION);
+            setTimeout(() => {
+                if (gameState.players[socket.id]) player.sprintAvailable = true;
+            }, SPRINT_COOLDOWN);
+        }
+        if (player.activeAbility === 'ant' && player.antAvailable) {
+            player.antAvailable = false;
+            player.isAnt = true;
+            const originalWidth = player.width;
+            const originalHeight = player.height;
+            const originalSpeed = player.speed;
+            player.width *= ANT_SIZE_FACTOR;
+            player.height *= ANT_SIZE_FACTOR;
+            player.speed *= ANT_SPEED_FACTOR;
+            setTimeout(() => {
+                if (gameState.players[socket.id]) {
+                    player.isAnt = false;
+                    player.width = originalWidth;
+                    player.height = originalHeight;
+                    player.speed = originalSpeed;
+                }
+            }, ANT_TRANSFORMATION_DURATION);
+            setTimeout(() => {
+                if (gameState.players[socket.id]) player.antAvailable = true;
+            }, ANT_COOLDOWN);
+        }
+        if (player.activeAbility === 'spy' && player.spyUsesLeft > 0 && !player.spyCooldown && !player.isSpying) {
+            player.isSpying = true;
+            player.spyUsesLeft--;
+            player.spyCooldown = true;
+            setTimeout(() => {
+                if (gameState.players[socket.id]) {
+                    player.isSpying = false;
+                }
+            }, SPY_DURATION);
+            setTimeout(() => {
+                if (gameState.players[socket.id]) {
+                    player.spyCooldown = false;
+                }
+            }, SPY_COOLDOWN);
+        }
+    }
+    
+    if (actionData.type === 'drop_skateboard') {
+        if (player.hasSkateboard) {
+            player.hasSkateboard = false;
+            const skate = gameState.skateboard;
+            skate.spawned = true;
+            skate.ownerId = null;
+            skate.x = player.x;
+            skate.y = player.y;
+        }
+    }
+
+<<<<<<< HEAD
             if (player.activeAbility === 'engineer' && !player.engineerAbilityUsed && !player.isInDuct) {
                 for (let i = 0; i < gameState.ducts.length; i++) {
+                    // isColliding deveria ser implementado conforme sua lógica
                     if (isColliding(player.hitbox, gameState.ducts[i])) {
                         player.isInDuct = true;
                         player.engineerAbilityUsed = true;
@@ -561,101 +913,260 @@ io.on('connection', (socket) => {
             }
         }
     });
+=======
+    if (actionData.type === 'interact') {
+        if (!player.hasSkateboard && gameState.skateboard && gameState.skateboard.spawned && !gameState.skateboard.ownerId) {
+            const skate = gameState.skateboard;
+            const dx = (player.x + player.width / 2) - (skate.x + skate.width / 2);
+            const dy = (player.y + player.height / 2) - (skate.y + skate.height / 2);
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < 100) {
+                player.hasSkateboard = true;
+                skate.ownerId = player.id;
+                skate.spawned = false;
+                return;
+            }
+        }
+
+        if (player.activeAbility === 'engineer' && !player.engineerAbilityUsed && !player.isInDuct) {
+            for (let i = 0; i < gameState.ducts.length; i++) {
+                if (isColliding(player.hitbox, gameState.ducts[i])) {
+                    player.isInDuct = true;
+                    player.engineerAbilityUsed = true;
+                    const exitDuct = gameState.ducts[(i + 1) % gameState.ducts.length];
+                    setTimeout(() => {
+                        if (gameState.players[socket.id]) {
+                            player.x = exitDuct.x + exitDuct.width / 2 - player.width / 2;
+                            player.y = exitDuct.y + exitDuct.height / 2 - player.height / 2;
+                            player.isInDuct = false;
+                        }
+                    }, DUCT_TRAVEL_TIME);
+                    break;
+                }
+            }
+        }
+    }
+});
+>>>>>>> 4ea81ec2aaee5dd9ca5d23fc30f778e89bff4a1a
+
     socket.on('sendMessage', (text) => {
         const player = gameState.players[socket.id];
-        if (player && text && text.trim().length > 0) {
-            const message = {
-                name: player.name,
-                text: text.substring(0, 150)
-            };
-            io.emit('newMessage', message);
+        if (!player || !text || text.trim().length === 0) return;
+        // comandos dev
+        const email = player.email;
+        const isDevUser = isDev(email);
+        const command = parseCommand(text.trim());
+        if (isDevUser && command) {
+            if (command.cmd === 'tp') {
+                const target = getPlayerByName(command.playerName);
+                if (target) {
+                    player.x = target.x;
+                    player.y = target.y;
+                    io.emit('newMessage', { name: 'Servidor', text: `${player.name} teleportou para ${target.name}!` });
+                } else {
+                    socket.emit('newMessage', { name: 'Servidor', text: `Jogador ${command.playerName} não encontrado.` });
+                }
+            }
+            else if (command.cmd === 'ban') {
+                const toBan = getPlayerByName(command.playerName);
+                if (toBan) {
+                    banPlayer({ id: toBan.id, email: toBan.email }, { permanent: true, reason: "Banido por admin!" });
+                    io.to(toBan.id).emit('banMessage', { reason: "Você foi banido do servidor.", color: "red" });
+                    io.emit('newMessage', { name: 'Servidor', text: `${toBan.name} foi banido permanentemente!` });
+                    io.sockets.sockets.get(toBan.id)?.disconnect();
+                } else {
+                    socket.emit('newMessage', { name: 'Servidor', text: `Jogador ${command.playerName} não encontrado.` });
+                }
+            }
+            else if (command.cmd === 'ban_temp') {
+                const toBan = getPlayerByName(command.playerName);
+                if (toBan) {
+                    // tempo em ms
+                    let timeMs = 0;
+                    switch (command.unit.toLowerCase()) {
+                        case 'second':
+                        case 'seconds': timeMs = command.amount * 1000; break;
+                        case 'minute':
+                        case 'minutes': timeMs = command.amount * 60 * 1000; break;
+                        case 'hour':
+                        case 'hours': timeMs = command.amount * 60 * 60 * 1000; break;
+                        case 'day':
+                        case 'days': timeMs = command.amount * 24 * 60 * 60 * 1000; break;
+                        case 'week':
+                        case 'weeks': timeMs = command.amount * 7 * 24 * 60 * 60 * 1000; break;
+                        case 'month':
+                        case 'months': timeMs = command.amount * 30 * 24 * 60 * 60 * 1000; break;
+                        case 'year':
+                        case 'years': timeMs = command.amount * 365 * 24 * 60 * 60 * 1000; break;
+                        default: timeMs = command.amount * 1000;
+                    }
+                    banPlayer({ id: toBan.id, email: toBan.email }, { permanent: false, until: Date.now() + timeMs, reason: `Banido por admin por ${command.amount} ${command.unit}` });
+                    io.to(toBan.id).emit('banMessage', { reason: `Você foi banido temporariamente (${command.amount} ${command.unit})!`, color: "red" });
+                    io.emit('newMessage', { name: 'Servidor', text: `${toBan.name} foi banido temporariamente por ${command.amount} ${command.unit}!` });
+                    io.sockets.sockets.get(toBan.id)?.disconnect();
+                } else {
+                    socket.emit('newMessage', { name: 'Servidor', text: `Jogador ${command.playerName} não encontrado.` });
+                }
+            }
+            return;
         }
+        // normal chat
+        const message = {
+            name: player.name,
+            text: text.substring(0, 150)
+        };
+        io.emit('newMessage', message);
     });
+
     socket.on('disconnect', () => {
-        console.log('Jogador desconectado:', socket.id);
+        console.log('Player disconnected:', socket.id);
         const player = gameState.players[socket.id];
-        if (player && player.activeAbility !== ' ') {
-            gameState.takenAbilities = gameState.takenAbilities.filter(ability => ability !== player.activeAbility);
+        if (player) {
+            if (player.activeAbility !== ' ') {
+                gameState.takenAbilities = gameState.takenAbilities.filter(ability => ability !== player.activeAbility);
+            }
+<<<<<<< HEAD
+            if (player.hasSkateboard) spawnSkateboard();
+=======
+            if (player.hasSkateboard) {
+                spawnSkateboard();
+            }
+>>>>>>> 4ea81ec2aaee5dd9ca5d23fc30f778e89bff4a1a
         }
         delete gameState.players[socket.id];
     });
 });
+
+// ================== GAME LOOP ====================
 setInterval(() => {
     if (!gameState || !gameState.players) {
         return;
     }
-    updateGameState();
+    // updateGameState(); // Sua função de lógica, não mostrada aqui para foco no login/ranking.
     io.emit('gameStateUpdate', gameState);
 }, TICK_RATE);
+
 setInterval(() => {
-    if (gameState && gameState.players && Object.keys(gameState.players).length > 0) {
-        if (gameState.gamePhase === 'waiting') {
-            if (gameState.startTime > 0) {
-                gameState.startTime--;
-            } else {
-                gameState.gamePhase = 'running';
-            }
-        } else if (gameState.gamePhase === 'running') {
-            if (gameState.timeLeft === ROUND_DURATION) {
-                const playerIds = Object.keys(gameState.players);
-                if (playerIds.length > 0) {
-                    const randomIndex = Math.floor(Math.random() * playerIds.length);
-                    const zombieId = playerIds[randomIndex];
-                    const zombiePlayer = gameState.players[zombieId];
+    if (!gameState || !gameState.players || Object.keys(gameState.players).length === 0) {
+        return;
+    }
+
+    if (gameState.gamePhase === 'waiting') {
+        gameState.startTime--;
+        if (gameState.startTime <= 0) {
+            gameState.gamePhase = 'running';
+            gameState.timeLeft = ROUND_DURATION;
+
+            const playerIds = Object.keys(gameState.players);
+            if (playerIds.length > 0) {
+                const randomIndex = Math.floor(Math.random() * playerIds.length);
+                const zombieId = playerIds[randomIndex];
+                const zombiePlayer = gameState.players[zombieId];
+                if (zombiePlayer) {
+
+                    if (zombiePlayer.hasSkateboard) {
+                        zombiePlayer.hasSkateboard = false;
+                        gameState.skateboard.spawned = true;
+                        gameState.skateboard.ownerId = null;
+                        gameState.skateboard.x = zombiePlayer.x;
+                        gameState.skateboard.y = zombiePlayer.y + zombiePlayer.height;
+                    }
+
                     zombiePlayer.role = 'zombie';
                     zombiePlayer.speed *= ZOMBIE_SPEED_BOOST;
-                    console.log(`A rodada começou! ${zombiePlayer.name} é o Zumbi inicial!`);
-                    io.emit('newMessage', { name: 'Servidor', text: `A infecção começou! ${zombiePlayer.name} é o zumbi!` });
+                    console.log(`The round has started! ${zombiePlayer.name} is the initial Zombie!`);
+                    io.emit('newMessage', { name: 'Server', text: `The infection has begun! ${zombiePlayer.name} is the zombie!` });
                 }
             }
-            if (gameState.timeLeft > 0) {
-                gameState.timeLeft--;
-                for (const id in gameState.players) {
-                    const player = gameState.players[id];
-                    player.coins += 1;
-                    if (!player.isAnt) {
-                        player.width += GROWTH_AMOUNT;
-                        player.height += GROWTH_AMOUNT;
-                    }
-                    if (!player.isSprinting && !player.isAnt) {
-                        const totalGrowth = player.width - INITIAL_PLAYER_SIZE;
-                        let newSpeed = INITIAL_PLAYER_SPEED + (totalGrowth * SPEED_PER_PIXEL_OF_GROWTH);
-                        player.speed = Math.min(newSpeed, MAX_PLAYER_SPEED);
-                    }
+        }
+    }
+
+    else if (gameState.gamePhase === 'running') {
+        gameState.timeLeft--;
+
+        for (const id in gameState.players) {
+            const player = gameState.players[id];
+            player.coins += 1;
+
+            if (player.role === 'zombie') {
+                if (!player.isAnt && player.width > INITIAL_PLAYER_SIZE) {
+                    player.width -= ZOMBIE_DECAY_AMOUNT;
+                    player.height -= ZOMBIE_DECAY_AMOUNT;
                 }
             } else {
-                console.log("O tempo acabou! Humanos venceram a rodada.");
-                io.emit('newMessage', { name: 'Servidor', text: 'O tempo acabou! Os Humanos sobreviveram!' });
-                const currentPlayers = gameState.players;
-                initializeGame();
-                gameState.players = currentPlayers;
-                for (const id in gameState.players) {
-                    const player = gameState.players[id];
-                    player.x = WORLD_WIDTH / 2 + 500;
-                    player.y = WORLD_HEIGHT / 2;
-                    player.role = 'human';
-                    player.activeAbility = ' ';
-                    player.isCamouflaged = false;
-                    player.camouflageAvailable = true;
-                    player.isSprinting = false;
-                    player.sprintAvailable = true;
-                    player.isAnt = false;
-                    player.antAvailable = true;
-                    player.isSpying = false;
-                    player.spyUsesLeft = 2;
-                    player.spyCooldown = false;
-                    player.isHidden = false;
-                    player.arrowAmmo = 0;
-                    player.engineerAbilityUsed = false;
-                    player.isInDuct = false;
-                    player.width = INITIAL_PLAYER_SIZE;
-                    player.height = INITIAL_PLAYER_SIZE * 1.25;
+                if (!player.isAnt) {
+                    player.width += GROWTH_AMOUNT;
+                    player.height += GROWTH_AMOUNT;
+                }
+            }
+
+            if (!player.isSprinting && !player.isAnt) {
+                const sizeDifference = player.width - INITIAL_PLAYER_SIZE;
+                let newSpeed = INITIAL_PLAYER_SPEED + (sizeDifference * SPEED_PER_PIXEL_OF_GROWTH);
+
+                if (player.role === 'zombie') {
+                    player.speed = Math.max(1.5, newSpeed);
+                } else {
+                    player.speed = Math.min(newSpeed, MAX_PLAYER_SPEED);
+                }
+            }
+        }
+
+        if (gameState.timeLeft <= 0) {
+            console.log("Time's up! Humans won the round.");
+            io.emit('newMessage', { name: 'Server', text: "Time's up! The Humans survived!" });
+
+            const skateWasOnGround = gameState.skateboard.spawned;
+            let skateOwnerId = null;
+            for (const id in gameState.players) {
+                if (gameState.players[id].hasSkateboard) {
+                    skateOwnerId = id;
+                    break;
+                }
+            }
+
+            const currentPlayers = gameState.players;
+            initializeGame();
+            gameState.players = currentPlayers;
+
+            if (skateWasOnGround || !skateOwnerId) {
+                spawnSkateboard();
+            } else {
+                gameState.skateboard.ownerId = skateOwnerId;
+                gameState.skateboard.spawned = false;
+            }
+
+            for (const id in gameState.players) {
+                const player = gameState.players[id];
+                player.x = WORLD_WIDTH / 2 + 500;
+                player.y = WORLD_HEIGHT / 2;
+                player.role = 'human';
+                player.activeAbility = ' ';
+                player.isCamouflaged = false;
+                player.camouflageAvailable = true;
+                player.isSprinting = false;
+                player.sprintAvailable = true;
+                player.isAnt = false;
+                player.antAvailable = true;
+                player.isSpying = false;
+                player.spyUsesLeft = 2;
+                player.spyCooldown = false;
+                player.isHidden = false;
+                player.arrowAmmo = 0;
+                player.engineerAbilityUsed = false;
+                player.isInDuct = false;
+
+                if (id !== skateOwnerId) {
+                    player.hasSkateboard = false;
                 }
             }
         }
     }
 }, 1000);
+
 server.listen(PORT, () => {
     initializeGame();
-    console.log(`🚀 Servidor do jogo rodando em http://localhost:${PORT}`);
+    spawnSkateboard();
+    console.log(`🚀 Game server running at http://localhost:${PORT}`);
 });
