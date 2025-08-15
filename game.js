@@ -1,166 +1,163 @@
-// =============================================================
-//                         GAME.JS COMPLETO
-// =============================================================
+// ==========================
+// INFESTATION.IO - CLIENT
+// ==========================
 
-const socket = io();
-
-// =============================================================
-//                       CONFIGURAÇÃO DO CANVAS
-// =============================================================
 const canvas = document.getElementById('gameCanvas');
-canvas.width = 2300;
-canvas.height = 1090;
 const ctx = canvas.getContext('2d');
 
-// =============================================================
-//                       VARIÁVEIS GLOBAIS
-// =============================================================
-let playerName = '';
-let players = {};
-let objects = [];
-let devMode = false;
+const socket = io(); // Conexão Socket.IO
+let playerId = null;
+let gameState = null;
+let messages = []; // Para chat normal
+let balloonMessages = []; // Para chat acima do player
 
-// =============================================================
-//                    AUTENTICAÇÃO DEV
-// =============================================================
-function authenticateDev(email) {
-    socket.emit('authDev', email);
+// --- CONFIGURAÇÕES ---
+const CANVAS_WIDTH = canvas.width;
+const CANVAS_HEIGHT = canvas.height;
+const MAX_CHAT_MESSAGES = 10;
+
+// --- INPUT ---
+const inputState = {
+    movement: { up: false, down: false, left: false, right: false },
+    rotation: 0
+};
+
+// --- ENVIO DE INPUT ---
+function sendInput() {
+    socket.emit('playerInput', inputState);
 }
+setInterval(sendInput, 1000 / 60);
 
-socket.on('authSuccess', msg => {
-    devMode = true;
-    console.log(msg);
+// --- MOVIMENTO ---
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'w') inputState.movement.up = true;
+    if (e.key === 's') inputState.movement.down = true;
+    if (e.key === 'a') inputState.movement.left = true;
+    if (e.key === 'd') inputState.movement.right = true;
 });
 
-// =============================================================
-//                      NOVO PLAYER
-// =============================================================
-function joinGame(name) {
-    playerName = name;
-    socket.emit('newPlayer', { name });
-}
+document.addEventListener('keyup', (e) => {
+    if (e.key === 'w') inputState.movement.up = false;
+    if (e.key === 's') inputState.movement.down = false;
+    if (e.key === 'a') inputState.movement.left = false;
+    if (e.key === 'd') inputState.movement.right = false;
+});
 
-// =============================================================
-//                          MOVIMENTO
-// =============================================================
-const keys = {};
-document.addEventListener('keydown', e => { keys[e.key] = true; });
-document.addEventListener('keyup', e => { keys[e.key] = false; });
+canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    inputState.rotation = Math.atan2(mouseY - CANVAS_HEIGHT / 2, mouseX - CANVAS_WIDTH / 2);
+});
 
-function handleMovement() {
-    let vx = 0, vy = 0;
-    if (keys['ArrowUp'] || keys['w']) vy -= 5;
-    if (keys['ArrowDown'] || keys['s']) vy += 5;
-    if (keys['ArrowLeft'] || keys['a']) vx -= 5;
-    if (keys['ArrowRight'] || keys['d']) vx += 5;
+// --- AÇÕES DO JOGADOR ---
+document.addEventListener('mousedown', (e) => {
+    socket.emit('playerAction', { type: 'primary_action' });
+});
 
-    socket.emit('move', { vx, vy });
-}
+document.addEventListener('keydown', (e) => {
+    if (e.key === ' ') socket.emit('playerAction', { type: 'ability' });
+    if (e.key === 'e') socket.emit('playerAction', { type: 'interact' });
+    if (e.key === 'q') socket.emit('playerAction', { type: 'drop_skateboard' });
+});
 
-// =============================================================
-//                          CHAT
-// =============================================================
+// --- ESCUTA DE ESTADO DO JOGO ---
+socket.on('connect', () => {
+    playerId = socket.id;
+});
+
+socket.on('gameStateUpdate', (state) => {
+    gameState = state;
+});
+
+// --- CHAT ---
 const chatInput = document.getElementById('chatInput');
-chatInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-        const msg = chatInput.value;
-        if (!msg) return;
+chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && chatInput.value.trim() !== '') {
+        const text = chatInput.value.trim();
+        socket.emit('sendMessage', text);
 
-        if (devMode && msg.startsWith('/')) {
-            socket.emit('command', msg);
-        } else {
-            socket.emit('chat', msg);
-        }
+        // Adiciona balão acima do player
+        balloonMessages.push({ text, playerId: playerId, duration: 200 });
 
         chatInput.value = '';
     }
 });
 
-socket.on('chatMessage', data => {
-    // Mensagem normal no chat
-    const chatBox = document.getElementById('chatBox');
-    chatBox.innerHTML += `<div>${data.name}: ${data.message}</div>`;
-    chatBox.scrollTop = chatBox.scrollHeight;
+socket.on('newMessage', (msg) => {
+    messages.push(msg);
+    if (messages.length > MAX_CHAT_MESSAGES) messages.shift();
 });
 
-// =============================================================
-//                     RECEBER ESTADO DO JOGO
-// =============================================================
-socket.on('gameStateUpdate', state => {
-    players = state.players;
-    objects = state.objects;
-});
+// --- RENDER ---
+function drawPlayer(player) {
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    ctx.rotate(player.rotation);
+    ctx.fillStyle = player.role === 'zombie' ? 'green' : 'blue';
+    ctx.fillRect(-player.width/2, -player.height/2, player.width, player.height);
+    ctx.restore();
 
-// =============================================================
-//                     EXECUTAR COMANDO DEV
-// =============================================================
-socket.on('commandSuccess', msg => {
-    console.log('Comando executado:', msg);
-});
-
-socket.on('banned', msg => {
-    alert(msg);
-});
-
-// =============================================================
-//                     RENDERIZAÇÃO
-// =============================================================
-function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Objetos
-    for (let obj of objects) {
-        if (obj.type === 'box') {
-            ctx.fillStyle = 'brown';
-            ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
-        }
-        if (obj.type === 'skateboard') {
-            ctx.fillStyle = 'gray';
-            ctx.fillRect(obj.x, obj.y, 40, 10);
-        }
-    }
-
-    // Players
-    for (let name in players) {
-        const p = players[name];
-        ctx.fillStyle = name === playerName ? 'blue' : 'red';
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 20, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Balões de chat
-        for (let i = 0; i < p.chatBalloons.length; i++) {
-            const b = p.chatBalloons[i];
+    // Balão acima do player
+    balloonMessages.forEach((bm) => {
+        if (bm.playerId === player.id) {
             ctx.fillStyle = 'white';
-            ctx.fillRect(p.x - 50, p.y - 60 - i * 25, 100, 20);
-            ctx.fillStyle = 'black';
-            ctx.fillText(b.text, p.x - 45, p.y - 45 - i * 25);
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(bm.text, player.x, player.y - player.height/2 - 10);
+            bm.duration--;
         }
+    });
+}
 
-        // Nome
-        ctx.fillStyle = 'white';
-        ctx.fillText(name, p.x - 20, p.y - 30);
+// --- RENDER CAIXAS E MÓVEIS ---
+function drawRect(obj, color = 'gray') {
+    ctx.save();
+    ctx.translate(obj.x + obj.width/2, obj.y + obj.height/2);
+    ctx.rotate(obj.rotation || 0);
+    ctx.fillStyle = color;
+    ctx.fillRect(-obj.width/2, -obj.height/2, obj.width, obj.height);
+    ctx.restore();
+}
+
+// --- RENDER DO CANVAS ---
+function render() {
+    if (!gameState || !gameState.players) return;
+    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    const me = gameState.players[playerId];
+    if (!me) return;
+
+    // Centraliza câmera
+    ctx.save();
+    ctx.translate(CANVAS_WIDTH/2 - me.x, CANVAS_HEIGHT/2 - me.y);
+
+    // Desenha casa, garagem, caixas e móveis
+    gameState.box.forEach(b => drawRect(b, 'brown'));
+    gameState.furniture.forEach(f => drawRect(f, 'darkgray'));
+
+    // Skateboard
+    if (gameState.skateboard) drawRect(gameState.skateboard, 'yellow');
+
+    // Jogadores
+    for (const id in gameState.players) {
+        drawPlayer(gameState.players[id]);
     }
 
-    requestAnimationFrame(draw);
+    ctx.restore();
+
+    // Chat HUD
+    ctx.fillStyle = 'white';
+    ctx.font = '16px Arial';
+    ctx.textAlign = 'left';
+    for (let i = 0; i < messages.length; i++) {
+        ctx.fillText(messages[i].name + ': ' + messages[i].text, 10, 20 + i * 20);
+    }
+
+    // Limpa balões expirados
+    balloonMessages = balloonMessages.filter(bm => bm.duration > 0);
+
+    requestAnimationFrame(render);
 }
 
-// =============================================================
-//                     LOOP PRINCIPAL
-// =============================================================
-function gameLoop() {
-    handleMovement();
-    requestAnimationFrame(gameLoop);
-}
-
-// =============================================================
-//                     INICIA JOGO
-// =============================================================
-draw();
-gameLoop();
-
-// =============================================================
-//                     AUTENTICAÇÃO DEV EXEMPLO
-// =============================================================
-// authenticateDev('enzosantiagosrv1245@gmail.com');
-// joinGame('Enzo'); // substituir pelo nome do player
+render();
