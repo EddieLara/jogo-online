@@ -1,74 +1,122 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-    <meta charset="UTF-8">
-    <title>Infestation.io</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #000;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            height: 100vh;
-            overflow: hidden;
-            font-family: Arial, sans-serif;
-            color: white;
-        }
-
-        #gameContainer {
-            position: relative;
-        }
-
-        canvas {
-            background-color: #111;
-            display: block;
-        }
-
-        #chatContainer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 300px;
-            max-height: 1080px;
-            overflow-y: auto;
-            padding: 10px;
-            background: rgba(0,0,0,0.5);
-            border-right: 2px solid #444;
-        }
-
-        #chatBox {
-            height: 900px;
-            overflow-y: auto;
-            padding-bottom: 10px;
-        }
-
-        #chatInput {
-            width: 100%;
-            box-sizing: border-box;
-            padding: 5px;
-            border: none;
-            outline: none;
-            background: #222;
-            color: white;
-        }
-
-        #chatInput::placeholder {
-            color: #888;
-        }
-    </style>
+<meta charset="UTF-8">
+<title>Infestation.io</title>
+<style>
+    body {
+        background-color: #000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        flex-direction: column;
+    }
+    #gameContainer {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+    }
+    canvas {
+        background-color: #000;
+        display: block;
+    }
+</style>
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
-    <div id="gameContainer">
-        <canvas id="gameCanvas"></canvas>
-        <div id="chatContainer">
-            <div id="chatBox"></div>
-            <input type="text" id="chatInput" placeholder="Digite sua mensagem ou comando..." />
-        </div>
-    </div>
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="game.js"></script>
+<div id="gLogin">
+    <div id="g_id_onload"
+         data-client_id="738743537606-a45hjckrjste7899rhbp938c612rkel2.apps.googleusercontent.com"
+         data-callback="handleCredentialResponse"
+         data-auto_prompt="false">
+    </div>
+    <div class="g_id_signin"
+         data-type="standard"
+         data-theme="outline"
+         data-size="large"
+         data-text="signin_with"
+         data-shape="rectangular"
+         data-logo_alignment="left">
+    </div>
+</div>
+
+<div id="gameContainer">
+    <canvas id="gameCanvas" width="2300" height="1090"></canvas>
+</div>
+
+<script>
+let socket;
+let playerInfo = null;
+
+// Função callback do Google
+function handleCredentialResponse(response) {
+    // response.credential contém o token JWT
+    fetch('/verify-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: response.credential })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if(data.success){
+            playerInfo = data.user; // {name, email}
+            initGame();
+        } else {
+            alert('Login Google falhou ou não permitido.');
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('Erro no login Google.');
+    });
+}
+
+// Inicializa o jogo
+function initGame(){
+    document.getElementById('gLogin').style.display = 'none';
+    document.getElementById('gameContainer').style.display = 'flex';
+
+    socket = io({
+        auth: {
+            userInfo: playerInfo
+        }
+    });
+
+    socket.on('connect', () => {
+        console.log('Conectado ao servidor');
+    });
+
+    socket.on('gameStateUpdate', (gameState) => {
+        // Aqui você vai desenhar no canvas
+        drawGame(gameState);
+    });
+
+    socket.on('newMessage', (msg) => {
+        console.log(msg.name + ': ' + msg.text);
+    });
+}
+
+function drawGame(gameState){
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for(const id in gameState.players){
+        const p = gameState.players[id];
+        ctx.fillStyle = (p.role==='zombie')?'red':'white';
+        ctx.fillRect(p.x, p.y, p.width, p.height);
+        // Mostrar balão de chat se tiver
+        if(p.chatMessage){
+            ctx.fillStyle = 'yellow';
+            ctx.font = '20px Arial';
+            ctx.fillText(p.chatMessage, p.x, p.y - 10);
+        }
+    }
+}
+</script>
 </body>
 </html>
