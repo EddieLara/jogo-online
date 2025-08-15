@@ -1,122 +1,114 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-<meta charset="UTF-8">
-<title>Infestation.io</title>
-<style>
-    body {
-        background-color: #000;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-        margin: 0;
-        flex-direction: column;
-    }
-    #gameContainer {
-        display: none;
-        flex-direction: column;
-        align-items: center;
-    }
-    canvas {
-        background-color: #000;
-        display: block;
-    }
-</style>
-<script src="/socket.io/socket.io.js"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+    <meta charset="UTF-8">
+    <title>Infestation.io</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            background-color: #000;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        #loginScreen {
+            position: absolute;
+            top:0; left:0;
+            width:100vw; height:100vh;
+            background-color:#111;
+            display:flex;
+            flex-direction:column;
+            justify-content:center;
+            align-items:center;
+            color:white;
+        }
+        #loginScreen h1 {
+            font-size:50px;
+            margin-bottom:30px;
+        }
+        #nameInput {
+            padding:15px 20px;
+            font-size:20px;
+            border-radius:10px;
+            border:none;
+            margin-bottom:20px;
+            outline:none;
+        }
+        #playBtn {
+            padding:20px 40px;
+            font-size:28px;
+            border:none;
+            border-radius:12px;
+            cursor:pointer;
+            background-color:#28a745;
+            color:white;
+            transition:0.2s;
+        }
+        #playBtn:hover { background-color:#1e7e34; }
+
+        #googleLoginBtn {
+            margin-top:20px;
+            padding:15px 30px;
+            font-size:22px;
+            border:none;
+            border-radius:12px;
+            background-color:#4285F4;
+            color:white;
+            cursor:pointer;
+            transition:0.2s;
+        }
+        #googleLoginBtn:hover { background-color:#357ae8; }
+
+        #gameCanvas {
+            display:none;
+            position:absolute;
+            top:0;
+            left:0;
+            background-color:#000;
+        }
+
+        #chatInput {
+            display:none;
+        }
+    </style>
 </head>
 <body>
-
-<div id="gLogin">
-    <div id="g_id_onload"
-         data-client_id="738743537606-a45hjckrjste7899rhbp938c612rkel2.apps.googleusercontent.com"
-         data-callback="handleCredentialResponse"
-         data-auto_prompt="false">
+    <div id="loginScreen">
+        <h1>Infestation.io</h1>
+        <input type="text" id="nameInput" placeholder="Digite seu nome">
+        <button id="playBtn">Jogar</button>
+        <button id="googleLoginBtn">Login com Google</button>
     </div>
-    <div class="g_id_signin"
-         data-type="standard"
-         data-theme="outline"
-         data-size="large"
-         data-text="signin_with"
-         data-shape="rectangular"
-         data-logo_alignment="left">
-    </div>
-</div>
 
-<div id="gameContainer">
-    <canvas id="gameCanvas" width="2300" height="1090"></canvas>
-</div>
+    <canvas id="gameCanvas"></canvas>
+    <input type="text" id="chatInput" placeholder="Digite sua mensagem">
 
-<script>
-let socket;
-let playerInfo = null;
+    <!-- Google Sign-In -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!-- Socket.IO -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- Game JS -->
+    <script src="game.js"></script>
 
-// Função callback do Google
-function handleCredentialResponse(response) {
-    // response.credential contém o token JWT
-    fetch('/verify-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: response.credential })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if(data.success){
-            playerInfo = data.user; // {name, email}
-            initGame();
-        } else {
-            alert('Login Google falhou ou não permitido.');
+    <script>
+        const nameInput = document.getElementById('nameInput');
+        const playBtn = document.getElementById('playBtn');
+        const loginScreen = document.getElementById('loginScreen');
+        const gameCanvas = document.getElementById('gameCanvas');
+
+        playBtn.onclick = () => {
+            const name = nameInput.value.trim();
+            if(!name){
+                alert('Digite seu nome antes de jogar!');
+                return;
+            }
+            // Setar o nome no game.js
+            myName = name;
+            googleUserInfo = { name: name, email: 'local@player.com' }; // email fictício local
+            loginScreen.style.display='none';
+            gameCanvas.style.display='block';
+            chatInput.style.display='block';
+            connectSocketWithAuth();
         }
-    })
-    .catch(err => {
-        console.error(err);
-        alert('Erro no login Google.');
-    });
-}
-
-// Inicializa o jogo
-function initGame(){
-    document.getElementById('gLogin').style.display = 'none';
-    document.getElementById('gameContainer').style.display = 'flex';
-
-    socket = io({
-        auth: {
-            userInfo: playerInfo
-        }
-    });
-
-    socket.on('connect', () => {
-        console.log('Conectado ao servidor');
-    });
-
-    socket.on('gameStateUpdate', (gameState) => {
-        // Aqui você vai desenhar no canvas
-        drawGame(gameState);
-    });
-
-    socket.on('newMessage', (msg) => {
-        console.log(msg.name + ': ' + msg.text);
-    });
-}
-
-function drawGame(gameState){
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    for(const id in gameState.players){
-        const p = gameState.players[id];
-        ctx.fillStyle = (p.role==='zombie')?'red':'white';
-        ctx.fillRect(p.x, p.y, p.width, p.height);
-        // Mostrar balão de chat se tiver
-        if(p.chatMessage){
-            ctx.fillStyle = 'yellow';
-            ctx.font = '20px Arial';
-            ctx.fillText(p.chatMessage, p.x, p.y - 10);
-        }
-    }
-}
-</script>
+    </script>
 </body>
 </html>
