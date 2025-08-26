@@ -121,7 +121,6 @@ function spawnSkateboard() {
 
 function initializeGame() {
     // Aqui entra toda a configuração de players, boxes, furniture, house, garage, etc.
-    // Mantive tudo do seu server.js original sem alterações
     gameState = {
         players: {},
         arrows: [],
