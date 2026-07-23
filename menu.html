@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infestation.io - Menu</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="loginScreen">
+        <div class="login-panel">
+            <h1>INFESTATION.IO</h1>
+            <p>MENU PRINCIPAL</p>
+            <input type="text" id="nameInput" placeholder="DIGITE SEU NOME">
+            <button id="playBtn">ENTRAR NO JOGO</button>
+            <button id="googleLoginBtn">LOGIN COM GOOGLE</button>
+        </div>
+    </div>
+
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="game.js"></script>
+    <script>
+        const nameInput = document.getElementById('nameInput');
+        const playBtn = document.getElementById('playBtn');
+        const loginScreen = document.getElementById('loginScreen');
+        const gameCanvas = document.getElementById('gameCanvas');
+
+        playBtn.onclick = () => {
+            const name = nameInput.value.trim();
+            if (!name) {
+                alert('DIGITE SEU NOME ANTES DE JOGAR.');
+                return;
+            }
+            myName = name;
+            googleUserInfo = { name: name, email: 'local@player.com' };
+            loginScreen.style.display = 'none';
+            gameCanvas.style.display = 'block';
+            chatInput.style.display = 'block';
+            connectSocketWithAuth();
+        };
+    </script>
+</body>
+</html>

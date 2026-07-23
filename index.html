@@ -2,52 +2,16 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="0;url=menu.html">
     <title>Infestation.io</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="loginScreen">
-        <div class="panel login-panel">
+        <div class="login-panel">
             <h1>Infestation.io</h1>
-            <p>Entrada oficial do servidor. Use o chat para comandos de administração.</p>
-            <input type="text" id="nameInput" placeholder="Digite seu nome">
-            <button id="playBtn">Entrar no jogo</button>
-            <button id="googleLoginBtn">Login com Google</button>
+            <p>Redirecionando para o menu principal...</p>
         </div>
     </div>
-
-    <div id="hud">
-        <div id="hudStatus">Aguardando conexão...</div>
-        <div id="commandPanel" class="overlay-panel"></div>
-    </div>
-
-    <canvas id="gameCanvas"></canvas>
-    <input type="text" id="chatInput" placeholder="Digite sua mensagem ou comando">
-
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="game.js"></script>
-
-    <script>
-        const nameInput = document.getElementById('nameInput');
-        const playBtn = document.getElementById('playBtn');
-        const loginScreen = document.getElementById('loginScreen');
-        const gameCanvas = document.getElementById('gameCanvas');
-
-        playBtn.onclick = () => {
-            const name = nameInput.value.trim();
-            if (!name) {
-                alert('Digite seu nome antes de jogar.');
-                return;
-            }
-            myName = name;
-            googleUserInfo = { name: name, email: 'local@player.com' };
-            loginScreen.style.display = 'none';
-            gameCanvas.style.display = 'block';
-            chatInput.style.display = 'block';
-            connectSocketWithAuth();
-        };
-    </script>
 </body>
 </html>
