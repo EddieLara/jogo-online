@@ -2,91 +2,31 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Infestation.io</title>
-    <style>
-        * { margin:0; padding:0; box-sizing:border-box; }
-        body {
-            background-color: #000;
-            font-family: Arial, sans-serif;
-            overflow: hidden;
-        }
-        #loginScreen {
-            position: absolute;
-            top:0; left:0;
-            width:100vw; height:100vh;
-            background-color:#111;
-            display:flex;
-            flex-direction:column;
-            justify-content:center;
-            align-items:center;
-            color:white;
-        }
-        #loginScreen h1 {
-            font-size:50px;
-            margin-bottom:30px;
-        }
-        #nameInput {
-            padding:15px 20px;
-            font-size:20px;
-            border-radius:10px;
-            border:none;
-            margin-bottom:20px;
-            outline:none;
-        }
-        #playBtn {
-            padding:20px 40px;
-            font-size:28px;
-            border:none;
-            border-radius:12px;
-            cursor:pointer;
-            background-color:#28a745;
-            color:white;
-            transition:0.2s;
-        }
-        #playBtn:hover { background-color:#1e7e34; }
-
-        #googleLoginBtn {
-            margin-top:20px;
-            padding:15px 30px;
-            font-size:22px;
-            border:none;
-            border-radius:12px;
-            background-color:#4285F4;
-            color:white;
-            cursor:pointer;
-            transition:0.2s;
-        }
-        #googleLoginBtn:hover { background-color:#357ae8; }
-
-        #gameCanvas {
-            display:none;
-            position:absolute;
-            top:0;
-            left:0;
-            background-color:#000;
-        }
-
-        #chatInput {
-            display:none;
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="loginScreen">
-        <h1>Infestation.io</h1>
-        <input type="text" id="nameInput" placeholder="Digite seu nome">
-        <button id="playBtn">Jogar</button>
-        <button id="googleLoginBtn">Login com Google</button>
+        <div class="panel login-panel">
+            <h1>Infestation.io</h1>
+            <p>Entrada oficial do servidor. Use o chat para comandos de administração.</p>
+            <input type="text" id="nameInput" placeholder="Digite seu nome">
+            <button id="playBtn">Entrar no jogo</button>
+            <button id="googleLoginBtn">Login com Google</button>
+        </div>
+    </div>
+
+    <div id="hud">
+        <div id="hudStatus">Aguardando conexão...</div>
+        <div id="commandPanel" class="overlay-panel"></div>
     </div>
 
     <canvas id="gameCanvas"></canvas>
-    <input type="text" id="chatInput" placeholder="Digite sua mensagem">
+    <input type="text" id="chatInput" placeholder="Digite sua mensagem ou comando">
 
-    <!-- Google Sign-In -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <!-- Socket.IO -->
     <script src="/socket.io/socket.io.js"></script>
-    <!-- Game JS -->
     <script src="game.js"></script>
 
     <script>
@@ -97,18 +37,17 @@
 
         playBtn.onclick = () => {
             const name = nameInput.value.trim();
-            if(!name){
-                alert('Digite seu nome antes de jogar!');
+            if (!name) {
+                alert('Digite seu nome antes de jogar.');
                 return;
             }
-            // Setar o nome no game.js
             myName = name;
-            googleUserInfo = { name: name, email: 'local@player.com' }; // email fictício local
-            loginScreen.style.display='none';
-            gameCanvas.style.display='block';
-            chatInput.style.display='block';
+            googleUserInfo = { name: name, email: 'local@player.com' };
+            loginScreen.style.display = 'none';
+            gameCanvas.style.display = 'block';
+            chatInput.style.display = 'block';
             connectSocketWithAuth();
-        }
+        };
     </script>
 </body>
 </html>
