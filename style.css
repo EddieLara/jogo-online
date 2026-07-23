@@ -5,9 +5,9 @@
 }
 
 body {
-    background: #030303;
+    background: linear-gradient(180deg, #080808 0%, #030303 100%);
     color: #f5f5f5;
-    font-family: 'Courier New', Courier, monospace;
+    font-family: 'Trebuchet MS', 'Courier New', Courier, monospace;
     overflow: hidden;
     text-transform: uppercase;
 }
@@ -15,7 +15,7 @@ body {
 #loginScreen {
     position: absolute;
     inset: 0;
-    background: radial-gradient(circle at top, #1a1a1a 0%, #060606 100%);
+    background: radial-gradient(circle at top, #1e1e1e 0%, #060606 100%);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -23,23 +23,52 @@ body {
 }
 
 .login-panel {
-    width: min(92vw, 480px);
-    padding: 32px 28px;
+    width: min(92vw, 520px);
+    padding: 18px;
+    background: rgba(8, 8, 8, 0.95);
     border: 2px solid rgba(255,255,255,0.18);
-    background: rgba(10, 10, 10, 0.92);
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), 0 0 30px rgba(0,0,0,0.7);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), 0 0 30px rgba(0,0,0,0.8);
     text-align: center;
 }
 
-.login-panel h1 {
-    font-size: 40px;
-    margin-bottom: 10px;
-    letter-spacing: 1px;
+.panel-frame {
+    border: 2px solid rgba(255,255,255,0.18);
+    padding: 24px 22px 18px;
+    background: linear-gradient(180deg, rgba(18,18,18,0.98) 0%, rgba(8,8,8,0.98) 100%);
 }
 
-.login-panel p {
+.panel-title {
+    font-size: 40px;
+    margin-bottom: 6px;
+    letter-spacing: 2px;
+    color: #f0f0f0;
+}
+
+.panel-subtitle {
     margin-bottom: 20px;
-    color: #cfcfcf;
+    color: #8ec98f;
+    letter-spacing: 2px;
+    font-size: 12px;
+}
+
+.panel-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    text-align: left;
+}
+
+.panel-body label {
+    font-size: 11px;
+    color: #c6c6c6;
+    letter-spacing: 2px;
+}
+
+.panel-footer {
+    margin-top: 16px;
+    font-size: 11px;
+    color: #8b8b8b;
+    letter-spacing: 1px;
 }
 
 #nameInput,
@@ -47,10 +76,11 @@ body {
 #googleLoginBtn {
     width: 100%;
     padding: 14px 16px;
-    border-radius: 8px;
-    border: 1px solid rgba(255,255,255,0.18);
-    font-size: 16px;
-    margin-bottom: 12px;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.16);
+    font-size: 15px;
+    font-family: inherit;
+    text-transform: uppercase;
 }
 
 #nameInput {
@@ -66,21 +96,21 @@ body {
 }
 
 #playBtn {
-    background: #2f6b3f;
+    background: linear-gradient(180deg, #3e7545 0%, #2b5d31 100%);
     color: #fff;
 }
 
 #playBtn:hover {
-    background: #3c8250;
+    background: linear-gradient(180deg, #4b8b53 0%, #326d3a 100%);
 }
 
 #googleLoginBtn {
-    background: #315a9b;
+    background: linear-gradient(180deg, #516e9d 0%, #37517e 100%);
     color: #fff;
 }
 
 #googleLoginBtn:hover {
-    background: #3d6fb8;
+    background: linear-gradient(180deg, #6384b1 0%, #43658f 100%);
 }
 
 #gameCanvas {
@@ -92,6 +122,8 @@ body {
 
 #chatInput {
     display: none;
+    font-family: inherit;
+    text-transform: uppercase;
 }
 
 #hud {
@@ -104,11 +136,12 @@ body {
 
 #hudStatus {
     padding: 8px 12px;
-    background: rgba(0,0,0,0.78);
+    background: rgba(0,0,0,0.82);
     border: 1px solid rgba(255,255,255,0.18);
-    border-radius: 6px;
-    font-size: 13px;
+    border-radius: 4px;
+    font-size: 12px;
     color: #e6e6e6;
+    letter-spacing: 1px;
     text-shadow: 0 1px 1px rgba(0,0,0,0.7);
 }
 
@@ -118,8 +151,9 @@ body {
     padding: 10px 12px;
     background: rgba(0,0,0,0.72);
     border: 1px solid rgba(255,255,255,0.16);
-    border-radius: 6px;
-    font-size: 13px;
+    border-radius: 4px;
+    font-size: 12px;
     line-height: 1.6;
     min-width: 220px;
+    letter-spacing: 1px;
 }

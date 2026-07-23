@@ -16,21 +16,23 @@ let socket = null;
 const GOOGLE_CLIENT_ID = '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';
 const loginBtn = document.getElementById('googleLoginBtn');
 
-loginBtn.onclick = () => {
-    if (!window.google || !window.google.accounts) {
-        alert('Google Sign-In não está disponível no momento.');
-        return;
-    }
-    window.google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleGoogleLogin
-    });
-    window.google.accounts.id.prompt(notification => {
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            alert('Falha ao abrir o popup de login Google.');
+if (loginBtn) {
+    loginBtn.onclick = () => {
+        if (!window.google || !window.google.accounts) {
+            alert('Google Sign-In não está disponível no momento.');
+            return;
         }
-    });
-};
+        window.google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: handleGoogleLogin
+        });
+        window.google.accounts.id.prompt(notification => {
+            if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+                alert('Falha ao abrir o popup de login Google.');
+            }
+        });
+    };
+}
 
 function handleGoogleLogin(response) {
     const payload = JSON.parse(atob(response.credential.split('.')[1]));
@@ -43,9 +45,9 @@ function handleGoogleLogin(response) {
         return;
     }
 
-    loginScreen.style.display = 'none';
-    gameCanvas.style.display = 'block';
-    chatInput.style.display = 'block';
+    if (loginScreen) loginScreen.style.display = 'none';
+    if (gameCanvas) gameCanvas.style.display = 'block';
+    if (chatInput) chatInput.style.display = 'block';
     connectSocketWithAuth();
 }
 
@@ -83,7 +85,7 @@ function connectSocketWithAuth() {
 }
 
 const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+const ctx = canvas ? canvas.getContext('2d') : null;
 
 const movement = { up: false, down: false, left: false, right: false };
 let mouse = { x: 0, y: 0 };
@@ -123,25 +125,29 @@ function setup() {
     document.body.style.margin = '0';
     document.body.style.overflow = 'hidden';
 
-    chatInput.style.display = 'none';
-    chatInput.style.position = 'absolute';
-    chatInput.style.bottom = '20px';
-    chatInput.style.left = '50%';
-    chatInput.style.transform = 'translateX(-50%)';
-    chatInput.style.width = '52%';
-    chatInput.style.maxWidth = '760px';
-    chatInput.style.padding = '12px 14px';
-    chatInput.style.fontSize = '16px';
-    chatInput.style.border = '2px solid rgba(255,255,255,0.2)';
-    chatInput.style.backgroundColor = 'rgba(0,0,0,0.78)';
-    chatInput.style.color = 'white';
-    chatInput.style.borderRadius = '8px';
-    chatInput.style.outline = 'none';
-    chatInput.style.zIndex = '10';
+    if (chatInput) {
+        chatInput.style.display = 'none';
+        chatInput.style.position = 'absolute';
+        chatInput.style.bottom = '20px';
+        chatInput.style.left = '50%';
+        chatInput.style.transform = 'translateX(-50%)';
+        chatInput.style.width = '52%';
+        chatInput.style.maxWidth = '760px';
+        chatInput.style.padding = '12px 14px';
+        chatInput.style.fontSize = '16px';
+        chatInput.style.border = '2px solid rgba(255,255,255,0.2)';
+        chatInput.style.backgroundColor = 'rgba(0,0,0,0.78)';
+        chatInput.style.color = 'white';
+        chatInput.style.borderRadius = '8px';
+        chatInput.style.outline = 'none';
+        chatInput.style.zIndex = '10';
+    }
 
     function resizeCanvas() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        if (canvas) {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
     }
 
     resizeCanvas();
@@ -179,12 +185,14 @@ function setCommandPanelVisible(visible) {
 }
 
 window.addEventListener('keydown', (event) => {
+    if (!socket || !canvas) return;
+
     const key = event.key.toLowerCase();
     const me = gameState.players[myId];
 
     if (key === 'enter') {
         event.preventDefault();
-        if (isChatting) {
+        if (chatInput && isChatting) {
             const msg = chatInput.value.trim();
             if (msg) {
                 if (msg.startsWith('cmd:') || msg.startsWith('tp:')) {
@@ -195,26 +203,28 @@ window.addEventListener('keydown', (event) => {
             }
             chatInput.value = '';
             chatInput.blur();
-        } else {
+        } else if (chatInput) {
             chatInput.style.display = 'block';
             chatInput.focus();
         }
         return;
     }
 
-    if (key === 'escape' && isChatting) {
+    if (key === 'escape' && isChatting && chatInput) {
         chatInput.value = '';
         chatInput.blur();
     }
 
-    chatInput.onfocus = () => {
-        isChatting = true;
-    };
+    if (chatInput) {
+        chatInput.onfocus = () => {
+            isChatting = true;
+        };
 
-    chatInput.onblur = () => {
-        isChatting = false;
-        chatInput.style.display = 'none';
-    };
+        chatInput.onblur = () => {
+            isChatting = false;
+            chatInput.style.display = 'none';
+        };
+    }
 
     if (isChatting) return;
 
@@ -248,6 +258,8 @@ window.addEventListener('keydown', (event) => {
 });
 
 window.addEventListener('keyup', (event) => {
+    if (!socket || !canvas) return;
+
     const key = event.key.toLowerCase();
     switch (key) {
         case 'w':
@@ -269,20 +281,22 @@ window.addEventListener('keyup', (event) => {
     }
 });
 
-canvas.addEventListener('mousemove', (event) => {
-    const rect = canvas.getBoundingClientRect();
-    mouse.x = event.clientX - rect.left;
-    mouse.y = event.clientY - rect.top;
-});
+if (canvas) {
+    canvas.addEventListener('mousemove', (event) => {
+        const rect = canvas.getBoundingClientRect();
+        mouse.x = event.clientX - rect.left;
+        mouse.y = event.clientY - rect.top;
+    });
 
-canvas.addEventListener('mousedown', () => {
-    const me = gameState.players[myId];
-    if (!me) return;
-    socket.emit('playerAction', { type: 'primary_action' });
-});
+    canvas.addEventListener('mousedown', () => {
+        const me = gameState.players[myId];
+        if (!me) return;
+        socket.emit('playerAction', { type: 'primary_action' });
+    });
+}
 
 function getPlayerAngle(player) {
-    if (!player) return 0;
+    if (!player || !canvas) return 0;
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
     const dx = mouse.x - cx;
@@ -291,7 +305,7 @@ function getPlayerAngle(player) {
 }
 
 function drawBalloonChat(player, msg) {
-    if (!player) return;
+    if (!player || !ctx) return;
     ctx.save();
     ctx.font = '16px Arial';
     ctx.textAlign = 'center';
@@ -306,6 +320,8 @@ function drawBalloonChat(player, msg) {
 }
 
 function draw() {
+    if (!ctx || !canvas) return;
+
     if (!myId || !gameState.players || !gameState.players[myId]) {
         ctx.fillStyle = 'black';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -339,6 +355,7 @@ function draw() {
 }
 
 function gameLoop() {
+    if (!ctx || !canvas || !socket) return;
     if (myId && gameState.players[myId]) {
         const me = gameState.players[myId];
         const rot = getPlayerAngle(me);
@@ -348,4 +365,6 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
-gameLoop();
+if (canvas) {
+    gameLoop();
+}

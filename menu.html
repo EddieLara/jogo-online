@@ -9,13 +9,27 @@
 <body>
     <div id="loginScreen">
         <div class="login-panel">
-            <h1>INFESTATION.IO</h1>
-            <p>MENU PRINCIPAL</p>
-            <input type="text" id="nameInput" placeholder="DIGITE SEU NOME">
-            <button id="playBtn">ENTRAR NO JOGO</button>
-            <button id="googleLoginBtn">LOGIN COM GOOGLE</button>
+            <div class="panel-frame">
+                <div class="panel-title">INFESTATION.IO</div>
+                <div class="panel-subtitle">SERVER ACCESS / ENTER THE WORLD</div>
+                <div class="panel-body">
+                    <label for="nameInput">PLAYER NAME</label>
+                    <input type="text" id="nameInput" placeholder="DIGITE SEU NOME">
+                    <button id="playBtn">ENTRAR NO JOGO</button>
+                    <button id="googleLoginBtn">LOGIN COM GOOGLE</button>
+                </div>
+                <div class="panel-footer">PRESS ENTER TO CHAT • USE cmd:on / cmd:off</div>
+            </div>
         </div>
     </div>
+
+    <div id="hud">
+        <div id="hudStatus">SERVER STATUS: STANDBY</div>
+        <div id="commandPanel" class="overlay-panel"></div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+    <input type="text" id="chatInput" placeholder="CHAT / COMMAND">
 
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="/socket.io/socket.io.js"></script>
@@ -23,8 +37,6 @@
     <script>
         const nameInput = document.getElementById('nameInput');
         const playBtn = document.getElementById('playBtn');
-        const loginScreen = document.getElementById('loginScreen');
-        const gameCanvas = document.getElementById('gameCanvas');
 
         playBtn.onclick = () => {
             const name = nameInput.value.trim();
@@ -34,9 +46,9 @@
             }
             myName = name;
             googleUserInfo = { name: name, email: 'local@player.com' };
-            loginScreen.style.display = 'none';
-            gameCanvas.style.display = 'block';
-            chatInput.style.display = 'block';
+            if (loginScreen) loginScreen.style.display = 'none';
+            if (gameCanvas) gameCanvas.style.display = 'block';
+            if (chatInput) chatInput.style.display = 'block';
             connectSocketWithAuth();
         };
     </script>
